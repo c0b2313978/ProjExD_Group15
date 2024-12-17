@@ -12,6 +12,7 @@ PLAYER_SPEED = 5
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GS = 32
 
+
 class Map:
     def __init__(self):
         """
@@ -120,21 +121,17 @@ class Item(pg.sprite.Sprite):
     """
     アイテムに関するクラス
     """
-    def __init__(self):
+    def __init__(self, x, y):
         """
         コインを生成する
         """
         super().__init__()
-        radius = GS // 6 
-        self.image = pg.Surface((radius * 2, radius * 2))
-        pg.draw.circle(self.image, (255, 255, 0), (radius, radius), radius)
-        self.image.set_colorkey(0, 0, 0)
-        self.rect = self.image.get_rect
-        self.rect.centerx = self.image.rect.centerx
-        self.rect.centery = self.image.rect.centery
-
-    def update(self):
-        pass
+        self.radius = GS // 6 
+        self.image = pg.Surface((self.radius * 2, self.radius * 2))
+        pg.draw.circle(self.image, (255, 255, 0), (self.radius, self.radius), self.radius)
+        self.image.set_colorkey((0, 0, 0))
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x * GS + GS // 2 - self.radius, y * GS + GS // 2 - self.radius)
         
 
 class Score:
@@ -180,15 +177,18 @@ def draw_start_screen(screen):
     font_copyright = pg.font.Font(None, 30)  # 小さいフォント
     copyright_text = font_copyright.render("(c) 2024 Group15", True, (255, 255, 255))
     screen.blit(copyright_text, (WIDTH - copyright_text.get_width() - 10, HEIGHT - copyright_text.get_height() - 10))
+
+
 def main():
     pg.display.set_caption("Pacman")
     screen = pg.display.set_mode((WIDTH, HEIGHT))   
     start=True
     d_map = Map()
-    
     # d_map.draw_map(screen)
     player = Player(d_map)
 
+    coins = pg.sprite.Group()
+    
     tmr = 0
     clock = pg.time.Clock()
 
@@ -201,10 +201,17 @@ def main():
                     sys.exit()
                 if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # スペースキーで開始
                     start = False
+                    
         else:
             # ゲーム中の処理を書く
             screen.fill((0, 0, 0))  # 背景を黒に設定
             d_map.draw_map(screen)
+
+            for y in range(len(d_map.map)):
+                for x in range(len(d_map.map[0])):
+                    if d_map.map[y][x] == 0:
+                        coin = Item(x, y)
+                        coins.add(coin)
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -224,6 +231,7 @@ def main():
         # プレイヤー（黄色の円）を描画
         player.draw(screen)
 
+        coins.draw(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
