@@ -8,6 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
+PLAYER_SPEED = 5  #パックマンの移動速度
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class Map:
@@ -136,6 +137,7 @@ def main():
     d_map = Map()
     screen.fill((0, 0, 0))
     d_map.draw_map(screen)
+    player = Player()
 
     tmr = 0
     clock = pg.time.Clock()
