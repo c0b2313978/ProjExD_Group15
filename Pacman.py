@@ -66,7 +66,7 @@ class Enemy:
     def __init__(self):
         pass
 
-class Item:
+class Item(pg.sprite.Sprite):
     """
     アイテムに関するクラス
     """
@@ -74,9 +74,11 @@ class Item:
         """
         アイテムを生成する
         """
+        super().__init__()
         self.image = pg.Surface((10, 10))
         pg.draw.circle(self.image, (255, 255, 0), (10, 10), 10)
         self.rect = self.image.get_rect
+        
 
 
 class Score:
