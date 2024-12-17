@@ -53,7 +53,7 @@ class Map:
         if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
             return False
         # マップチップは移動可能か？
-        if map[y][x] == 1:  
+        if self.map[y][x] == 1:  
             return False
         return True
 
@@ -83,22 +83,25 @@ class Player(pg.sprite.Sprite):
         キー入力に応じてプレイヤーを移動させる
         """
         next_x, next_y = self.x, self.y  # 移動先を仮計算
-
+        tmp = self.radius
         if keys[pg.K_LEFT]:
-            next_x -= PLAYER_SPEED
-        if keys[pg.K_RIGHT]:
-            next_x += PLAYER_SPEED
-        if keys[pg.K_UP]:
-            next_y -= PLAYER_SPEED
-        if keys[pg.K_DOWN]:
-            next_y += PLAYER_SPEED
+            next_x = self.x - PLAYER_SPEED
+            tmp*=-1
+        elif keys[pg.K_RIGHT]:
+            next_x = self.x + PLAYER_SPEED
+        elif keys[pg.K_UP]:
+            next_y = self.y - PLAYER_SPEED
+            tmp*=-1
+        elif keys[pg.K_DOWN]:
+            next_y = self.y + PLAYER_SPEED
 
-        # マップのタイル単位での判定（次の座標が壁かどうか）
-        tile_x = next_x // self.map.GS
-        tile_y = next_y // self.map.GS
-        if self.map.is_movable(tile_x, tile_y):
-            self.x, self.y = next_x, next_y  # 壁でない場合のみ座標を更新
+        # 座標をタイル単位に変換して移動可能か判定
+        next_tile_x = (next_x + tmp)// self.map.GS 
+        next_tile_y = (next_y + tmp) // self.map.GS 
 
+        if self.map.is_movable(next_tile_x, next_tile_y):
+            self.x = next_x
+            self.y = next_y
 
 
 
@@ -132,12 +135,12 @@ def main():
     d_map = Map()
     
     # d_map.draw_map(screen)
-    player = Player()
+    player = Player(d_map)
 
     tmr = 0
     clock = pg.time.Clock()
     while True:
-        
+        screen.fill((0, 0, 0))
         d_map.draw_map(screen)
         key_lst = pg.key.get_pressed()
         for event in pg.event.get():
