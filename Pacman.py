@@ -8,7 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
-PLAYER_SPEED = 5
+PLAYER_SPEED = 3
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GS = 32
 
@@ -73,9 +73,10 @@ class Player(pg.sprite.Sprite):
         """
         パックマンを生成する
         """
+        
         self.x = 50  # 初期X座標
         self.y = 50  # 初期Y座標
-        self.radius = 10  # 円の半径
+        self.radius = 12 # 円の半径
         self.color = (255, 255, 0)  # 円の色（黄色）
         self.map = game_map  # マップインスタンスを参照する
 
@@ -85,30 +86,61 @@ class Player(pg.sprite.Sprite):
         """
         pg.draw.circle(screen, self.color, (self.x, self.y), self.radius)
 
+    def can_move(self, next_x, next_y):
+        """
+        プレイヤーが半径分考慮して、(next_x, next_y)に移動可能かチェックする関数
+        複数点チェックでめり込みを防ぐ
+        """
+        r = self.radius
+        # チェックする相対位置(プレイヤー円周を囲むポイント群)
+        check_offsets = [
+            (-r, 0),
+            (r, 0),
+            (0, -r),
+            (0, r),
+            (-r, -r),
+            (r, -r),
+            (-r, r),
+            (r, r)
+        ]
+        
+        for ox, oy in check_offsets:
+            tile_x = (next_x + ox) // GS
+            tile_y = (next_y + oy) // GS
+            if not self.map.is_movable(tile_x, tile_y):
+                return False
+        return True
+
     def move(self, keys):
         """
         キー入力に応じてプレイヤーを移動させる
+        水平移動と垂直移動を分けて処理する
         """
-        next_x, next_y = self.x, self.y  # 移動先を仮計算
-        tmp = self.radius
+        next_x, next_y = self.x, self.y
+
+        # 水平移動
         if keys[pg.K_LEFT]:
-            next_x = self.x - PLAYER_SPEED
-            tmp*=-1
+            new_x = self.x - PLAYER_SPEED
+            if self.can_move(new_x, self.y):
+                next_x = new_x
         elif keys[pg.K_RIGHT]:
-            next_x = self.x + PLAYER_SPEED
-        elif keys[pg.K_UP]:
-            next_y = self.y - PLAYER_SPEED
-            tmp*=-1
+            new_x = self.x + PLAYER_SPEED
+            if self.can_move(new_x, self.y):
+                next_x = new_x
+
+        # 垂直移動
+        if keys[pg.K_UP]:
+            new_y = self.y - PLAYER_SPEED
+            if self.can_move(next_x, new_y):
+                next_y = new_y
         elif keys[pg.K_DOWN]:
-            next_y = self.y + PLAYER_SPEED
+            new_y = self.y + PLAYER_SPEED
+            if self.can_move(next_x, new_y):
+                next_y = new_y
 
-        # 座標をタイル単位に変換して移動可能か判定
-        next_tile_x = (next_x + tmp)// GS 
-        next_tile_y = (next_y + tmp) // GS 
+        self.x, self.y = next_x, next_y
 
-        if self.map.is_movable(next_tile_x, next_tile_y):
-            self.x = next_x
-            self.y = next_y
+    
 
 
 
