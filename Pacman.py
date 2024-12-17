@@ -67,16 +67,23 @@ class Enemy:
         pass
 
 class Item:
+    """
+    アイテムに関するクラス
+    """
     def __init__(self):
-        pass
+        """
+        アイテムを生成する
+        """
+        self.image = pg.Surface((10, 10))
+        pg.draw.circle(self.image, (255, 255, 0), (10, 10), 10)
+        self.rect = self.image.get_rect
 
 
 class Score:
     def __init__(self):
         pass
 
-
-
+    
 
 def main():
     pg.display.set_caption("Pacman")
