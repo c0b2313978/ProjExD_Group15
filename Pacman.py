@@ -122,12 +122,16 @@ class Item(pg.sprite.Sprite):
     """
     def __init__(self):
         """
-        アイテムを生成する
+        コインを生成する
         """
         super().__init__()
-        self.image = pg.Surface((10, 10))
-        pg.draw.circle(self.image, (255, 255, 0), (10, 10), 10)
+        radius = GS // 6 
+        self.image = pg.Surface((radius * 2, radius * 2))
+        pg.draw.circle(self.image, (255, 255, 0), (radius, radius), radius)
+        self.image.set_colorkey(0, 0, 0)
         self.rect = self.image.get_rect
+        self.rect.centerx = self.image.rect.centerx
+        self.rect.centery = self.image.rect.centery
 
     def update(self):
         pass
