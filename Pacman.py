@@ -8,6 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
+PLAYER_SPEED = 5
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GS = 32
 
@@ -59,14 +60,56 @@ class Map:
         if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
             return False
         # マップチップは移動可能か？
-        if map[y][x] == 1:  
+        if self.map[y][x] == 1:  
             return False
         return True
 
 
-class Player:
-    def __init__(self):
-        pass
+class Player(pg.sprite.Sprite):
+    """
+    ゲームキャラクター（パックマン）に関するクラス
+    """
+    def __init__(self, game_map):
+        """
+        パックマンを生成する
+        """
+        self.x = 50  # 初期X座標
+        self.y = 50  # 初期Y座標
+        self.radius = 10  # 円の半径
+        self.color = (255, 255, 0)  # 円の色（黄色）
+        self.map = game_map  # マップインスタンスを参照する
+
+    def draw(self, screen):
+        """
+        プレイヤー（黄色の円）を描画する
+        """
+        pg.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+
+    def move(self, keys):
+        """
+        キー入力に応じてプレイヤーを移動させる
+        """
+        next_x, next_y = self.x, self.y  # 移動先を仮計算
+        tmp = self.radius
+        if keys[pg.K_LEFT]:
+            next_x = self.x - PLAYER_SPEED
+            tmp*=-1
+        elif keys[pg.K_RIGHT]:
+            next_x = self.x + PLAYER_SPEED
+        elif keys[pg.K_UP]:
+            next_y = self.y - PLAYER_SPEED
+            tmp*=-1
+        elif keys[pg.K_DOWN]:
+            next_y = self.y + PLAYER_SPEED
+
+        # 座標をタイル単位に変換して移動可能か判定
+        next_tile_x = (next_x + tmp)// GS 
+        next_tile_y = (next_y + tmp) // GS 
+
+        if self.map.is_movable(next_tile_x, next_tile_y):
+            self.x = next_x
+            self.y = next_y
+
 
 
 class Enemy:
@@ -136,8 +179,9 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))   
     start=True
     d_map = Map()
-    screen.fill((0, 0, 0))
-    d_map.draw_map(screen)
+    
+    # d_map.draw_map(screen)
+    player = Player(d_map)
 
     tmr = 0
     clock = pg.time.Clock()
@@ -163,7 +207,16 @@ def main():
 
         key_lst = pg.key.get_pressed()
         for event in pg.event.get():
-            pass
+             if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
+
+        # キー入力を取得して移動処理
+        keys = pg.key.get_pressed()
+        player.move(keys)
+
+        # プレイヤー（黄色の円）を描画
+        player.draw(screen)
 
         pg.display.update()
         tmr += 1
