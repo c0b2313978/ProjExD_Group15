@@ -50,7 +50,7 @@ class Map:
     def is_movable(self, x, y):
         """(x,y)は移動可能か？"""
         # マップ範囲内か？
-        if x < 0 or x > COL-1 or y < 0 or y > ROW-1:
+        if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
             return False
         # マップチップは移動可能か？
         if map[y][x] == 1:  
@@ -136,13 +136,14 @@ def main():
 
     d_map = Map()
     screen.fill((0, 0, 0))
-    d_map.draw_map(screen)
+    
     player = Player()
 
     tmr = 0
     clock = pg.time.Clock()
     while True:
-        screen.fill((0, 0, 0))
+        # screen.fill((0, 0, 0))
+        d_map.draw_map(screen)
         key_lst = pg.key.get_pressed()
         for event in pg.event.get():
             if event.type == pg.QUIT:
