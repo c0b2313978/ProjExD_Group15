@@ -221,6 +221,12 @@ def main():
 
     coins = pg.sprite.Group()
     
+    for y in range(len(d_map.map)):
+        for x in range(len(d_map.map[0])):
+            if d_map.map[y][x] == 0:
+                coin = Item(x, y)
+                coins.add(coin)
+
     tmr = 0
     clock = pg.time.Clock()
 
@@ -239,31 +245,25 @@ def main():
             screen.fill((0, 0, 0))  # 背景を黒に設定
             d_map.draw_map(screen)
 
-            for y in range(len(d_map.map)):
-                for x in range(len(d_map.map[0])):
-                    if d_map.map[y][x] == 0:
-                        coin = Item(x, y)
-                        coins.add(coin)
-
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     pg.quit()
                     sys.exit()
 
-        key_lst = pg.key.get_pressed()
-        for event in pg.event.get():
-             if event.type == pg.QUIT:
-                pg.quit()
-                sys.exit()
+            key_lst = pg.key.get_pressed()
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
 
-        # キー入力を取得して移動処理
-        keys = pg.key.get_pressed()
-        player.move(keys)
+            # キー入力を取得して移動処理
+            keys = pg.key.get_pressed()
+            player.move(keys)
 
-        # プレイヤー（黄色の円）を描画
-        player.draw(screen)
+            # プレイヤー（黄色の円）を描画
+            player.draw(screen)
 
-        coins.draw(screen)
+            coins.draw(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
