@@ -20,17 +20,6 @@ class Player(pg.sprite.Sprite):
     """
     ゲームキャラクター（パックマン）に関するクラス
     """
-    delta = {  # 押下キーと移動量の辞書
-        pg.K_UP: (0, -1),
-        pg.K_DOWN: (0, +1),
-        pg.K_LEFT: (-1, 0),
-        pg.K_RIGHT: (+1, 0),
-    }
-
-    def __init__(self):
-        """
-        パックマンを生成する
-        """
     def __init__(self):
         """
         パックマンを生成する
