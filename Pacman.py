@@ -8,7 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
-PLAYER_SPEED = 5
+PLAYER_SPEED = 2
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GS = 32
 
@@ -53,16 +53,25 @@ class Map:
                 elif self.map[r][c] == 1:  # 壁（青の四角）
                     pg.draw.rect(screen, (0, 0, 255), (c*GS, r*GS, GS, GS))
 
-    def is_movable(self, x, y):
+    def is_movable(self, rect):
         """
-        (x,y)は移動可能か？
+        rect が移動可能か？
         """
-        # マップ範囲内か？
-        if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
-            return False
-        # マップチップは移動可能か？
-        if self.map[y][x] == 1:  
-            return False
+        # rect の各辺の座標をタイル座標に変換
+        left_tile = rect.left // GS
+        right_tile = rect.right // GS
+        top_tile = rect.top // GS
+        bottom_tile = rect.bottom // GS
+
+        # マップ範囲外に出ていないかチェック
+        if left_tile < 0 or right_tile >= self.COL or top_tile < 0 or bottom_tile >= self.ROW:
+          return False
+
+        # 各タイルが移動可能かチェック
+        for x in range(left_tile, right_tile + 1):
+           for y in range(top_tile, bottom_tile + 1):
+            if self.map[y][x] == 1: #壁があったら
+                return False
         return True
 
 
@@ -74,43 +83,124 @@ class Player(pg.sprite.Sprite):
         """
         パックマンを生成する
         """
+        super().__init__()
         self.x = 50  # 初期X座標
         self.y = 50  # 初期Y座標
-        self.radius = 10  # 円の半径
+        self.radius = 12 # 円の半径
         self.color = (255, 255, 0)  # 円の色（黄色）
         self.map = game_map  # マップインスタンスを参照する
+        self.image = pg.Surface((self.radius * 2, self.radius * 2))
+        pg.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
+        self.image.set_colorkey((0, 0, 0))
+        self.rect = self.image.get_rect(center=(self.x, self.y)) 
+        self.last_direction = None  #最後に押された方向を保持
+        self.next_direction = None
 
     def draw(self, screen):
         """
         プレイヤー（黄色の円）を描画する
         """
-        pg.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        screen.blit(self.image, self.rect)
+
+    def can_move(self, next_x, next_y):
+        """
+        プレイヤーが半径分考慮して、(next_x, next_y)に移動可能かチェックする関数
+        複数点チェックでめり込みを防ぐ
+        """
+        r = self.radius
+        # チェックする相対位置(プレイヤー円周を囲むポイント群)
+        check_offsets = [
+            (-r, 0),
+            (r, 0),
+            (0, -r),
+            (0, r),
+            (-r, -r),
+            (r, -r),
+            (-r, r),
+            (r, r)
+        ]
+        
+        for ox, oy in check_offsets:
+            tile_x = (next_x + ox) // GS
+            tile_y = (next_y + oy) // GS
+            if not self.map.is_movable(tile_x, tile_y):
+                return False
+        return True
+    
+    def is_at_corner(self):
+        """
+        プレイヤーが角にいるかどうかを判定
+        """
+        r = self.radius
+        check_offsets = [
+            (-r, 0),
+            (r, 0),
+            (0, -r),
+            (0, r),
+        ]
+        
+        #移動できる方向をカウント
+        possible_directions = 0
+        for dx,dy in check_offsets:
+          next_rect=self.rect.move(dx,dy)
+          if self.map.is_movable(next_rect):
+              possible_directions += 1
+
+        # 2方向以上移動可能なら角とみなす
+        return possible_directions >= 3
 
     def move(self, keys):
         """
         キー入力に応じてプレイヤーを移動させる
         """
-        next_x, next_y = self.x, self.y  # 移動先を仮計算
-        tmp = self.radius
+        dx, dy = 0, 0  # 移動量
+
+        # 現在の方向のまま進むための移動量
+        if self.last_direction == "left":
+            dx, dy = -PLAYER_SPEED, 0
+        elif self.last_direction == "right":
+            dx, dy = PLAYER_SPEED, 0
+        elif self.last_direction == "up":
+            dx, dy = 0, -PLAYER_SPEED
+        elif self.last_direction == "down":
+            dx, dy = 0, PLAYER_SPEED
+
+        # 次の方向の移動をチェック
+        if self.next_direction:
+            temp_dx, temp_dy = 0, 0
+            if self.next_direction == "left":
+                temp_dx, temp_dy = -PLAYER_SPEED, 0
+            elif self.next_direction == "right":
+                temp_dx, temp_dy = PLAYER_SPEED, 0
+            elif self.next_direction == "up":
+                temp_dx, temp_dy = 0, -PLAYER_SPEED
+            elif self.next_direction == "down":
+                temp_dx, temp_dy = 0, PLAYER_SPEED
+
+            # 次の方向が移動可能なら方向転換
+            if self.map.is_movable(self.rect.move(temp_dx, temp_dy)):
+                self.last_direction = self.next_direction
+                dx, dy = temp_dx, temp_dy
+                self.next_direction = None
+
+        # 現在の方向で移動可能か判定
+        next_rect = self.rect.move(dx, dy)
+        if self.map.is_movable(next_rect):
+            self.rect = next_rect
+            self.x, self.y = self.rect.center
+        else:
+            # 現在の方向で動けない場合は停止
+            dx, dy = 0, 0
+
+        # キー入力を次の方向として記録
         if keys[pg.K_LEFT]:
-            next_x = self.x - PLAYER_SPEED
-            tmp*=-1
+            self.next_direction = "left"
         elif keys[pg.K_RIGHT]:
-            next_x = self.x + PLAYER_SPEED
+            self.next_direction = "right"
         elif keys[pg.K_UP]:
-            next_y = self.y - PLAYER_SPEED
-            tmp*=-1
+            self.next_direction = "up"
         elif keys[pg.K_DOWN]:
-            next_y = self.y + PLAYER_SPEED
-
-        # 座標をタイル単位に変換して移動可能か判定
-        next_tile_x = (next_x + tmp)// GS 
-        next_tile_y = (next_y + tmp) // GS 
-
-        if self.map.is_movable(next_tile_x, next_tile_y):
-            self.x = next_x
-            self.y = next_y
-
+            self.next_direction = "down"
 
 
 class Enemy:
@@ -121,31 +211,37 @@ class Item(pg.sprite.Sprite):
     """
     アイテムに関するクラス
     """
-    def __init__(self, x, y):
+    def __init__(self, x: int , y:int):
         """
         コインを生成する
+        x, y : mapの通路の部分
         """
         super().__init__()
         self.radius = GS // 6 
         self.image = pg.Surface((self.radius * 2, self.radius * 2))
-        pg.draw.circle(self.image, (255, 255, 0), (self.radius, self.radius), self.radius)
+        pg.draw.circle(self.image, (255, 255, 0), (self.radius, self.radius), self.radius)  # 半径radiusの円を描く
         self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
-        self.rect.topleft = (x * GS + GS // 2 - self.radius, y * GS + GS // 2 - self.radius)
+        self.rect.topleft = (x * GS + GS // 2 - self.radius, y * GS + GS // 2 - self.radius)  # rectの左上の座標
         
 
 class Score:
+    """
+    コインを獲得したときスコアとして表示するクラス
+    コイン1枚：50点
+    """
     def __init__(self):
-        self.font = pg.font.Font(None, 40)
-        self.color = (255, 255, 255)
-        self.value = 100
+        self.font = pg.font.Font(None, 40)  # サイズは40
+        self.color = (255, 255, 255)  # カラーは白
+        self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
-        self.rect.center = WIDTH-100, HEIGHT-150
+        self.rect.center = WIDTH - 110, HEIGHT - 150
 
-    def update(self, screen: pg.Surface):
+    def update(self, screen: pg.Surface):  
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)  
+
 
 def draw_start_screen(screen):
     """
@@ -199,6 +295,7 @@ def main():
     coins = pg.sprite.Group()
     score = Score()
     
+    #コインの生成
     for y in range(len(d_map.map)):
         for x in range(len(d_map.map[0])):
             if d_map.map[y][x] == 0:
@@ -241,6 +338,11 @@ def main():
             # プレイヤー（黄色の円）を描画
             player.draw(screen)
 
+            # playerとコインの値判定
+            hit_coins = pg.sprite.spritecollide(player, coins, False)
+            for coin in hit_coins:
+                coins.remove(coin)
+                score.value += 50
             coins.draw(screen)
 
             score.update(screen)
