@@ -136,7 +136,16 @@ class Item(pg.sprite.Sprite):
 
 class Score:
     def __init__(self):
-        pass
+        self.font = pg.font.Font(None, 50)
+        self.color = (255, 255, 255)
+        self.value = 100
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH-100, HEIGHT-150
+
+    def update(self, screen: pg.Surface):
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        screen.blit(self.image, self.rect)  
 
 def draw_start_screen(screen):
     """
@@ -188,6 +197,7 @@ def main():
     player = Player(d_map)
 
     coins = pg.sprite.Group()
+    score = Score()
     
     for y in range(len(d_map.map)):
         for x in range(len(d_map.map[0])):
@@ -232,11 +242,11 @@ def main():
             player.draw(screen)
 
             coins.draw(screen)
+
+            score.update(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
-
-
 
 if __name__ == "__main__":
     pg.init()
