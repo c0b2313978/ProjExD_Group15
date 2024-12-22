@@ -8,7 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
-PLAYER_SPEED = 1
+PLAYER_SPEED = 2
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GS = 32
 
