@@ -53,16 +53,25 @@ class Map:
                 elif self.map[r][c] == 1:  # 壁（青の四角）
                     pg.draw.rect(screen, (0, 0, 255), (c*GS, r*GS, GS, GS))
 
-    def is_movable(self, x, y):
+    def is_movable(self, rect):
         """
-        (x,y)は移動可能か？
+        rect が移動可能か？
         """
-        # マップ範囲内か？
-        if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
-            return False
-        # マップチップは移動可能か？
-        if self.map[y][x] == 1:  
-            return False
+        # rect の各辺の座標をタイル座標に変換
+        left_tile = rect.left // GS
+        right_tile = rect.right // GS
+        top_tile = rect.top // GS
+        bottom_tile = rect.bottom // GS
+
+        # マップ範囲外に出ていないかチェック
+        if left_tile < 0 or right_tile >= self.COL or top_tile < 0 or bottom_tile >= self.ROW:
+          return False
+
+        # 各タイルが移動可能かチェック
+        for x in range(left_tile, right_tile + 1):
+           for y in range(top_tile, bottom_tile + 1):
+            if self.map[y][x] == 1: #壁があったら
+                return False
         return True
 
 
@@ -80,38 +89,41 @@ class Player(pg.sprite.Sprite):
         self.radius = 10  # 円の半径
         self.color = (255, 255, 0)  # 円の色（黄色）
         self.map = game_map  # マップインスタンスを参照する
+        self.image = pg.Surface((self.radius * 2, self.radius * 2))
+        pg.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
+        self.image.set_colorkey((0, 0, 0))
+        self.rect = self.image.get_rect(center = (self.x, self.y)) 
 
     def draw(self, screen):
         """
         プレイヤー（黄色の円）を描画する
         """
-        pg.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        screen.blit(self.image, self.rect)
 
     def move(self, keys):
         """
         キー入力に応じてプレイヤーを移動させる
         """
-        next_x, next_y = self.x, self.y  # 移動先を仮計算
-        tmp = self.radius
+        next_x, next_y = self.x, self.y
+        dx, dy = 0, 0  # 移動量
+
         if keys[pg.K_LEFT]:
-            next_x = self.x - PLAYER_SPEED
-            tmp*=-1
+            dx = -PLAYER_SPEED
         elif keys[pg.K_RIGHT]:
-            next_x = self.x + PLAYER_SPEED
+            dx = PLAYER_SPEED
         elif keys[pg.K_UP]:
-            next_y = self.y - PLAYER_SPEED
-            tmp*=-1
+            dy = -PLAYER_SPEED
         elif keys[pg.K_DOWN]:
-            next_y = self.y + PLAYER_SPEED
-
-        # 座標をタイル単位に変換して移動可能か判定
-        next_tile_x = (next_x + tmp)// GS 
-        next_tile_y = (next_y + tmp) // GS 
-
-        if self.map.is_movable(next_tile_x, next_tile_y):
-            self.x = next_x
-            self.y = next_y
-
+            dy = PLAYER_SPEED
+        
+        # 移動先のrectを計算
+        next_rect = self.rect.move(dx, dy)
+            
+        # 移動先が移動可能か判定
+        if self.map.is_movable(next_rect):
+            self.x = next_x + dx
+            self.y = next_y + dy
+            self.rect.center = (self.x,self.y)
 
 
 class Enemy:
@@ -137,7 +149,7 @@ class Item(pg.sprite.Sprite):
 
 class Score:
     def __init__(self):
-        self.font = pg.font.Font(None, 50)
+        self.font = pg.font.Font(None, 40)
         self.color = (255, 255, 255)
         self.value = 100
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
@@ -147,6 +159,7 @@ class Score:
     def update(self, screen: pg.Surface):
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)  
+
 
 def draw_start_screen(screen):
     """
@@ -242,12 +255,11 @@ def main():
             # プレイヤー（黄色の円）を描画
             player.draw(screen)
 
-            for _ in pg.sprite.spritecollide(player, coins, True):
-                score.value += 100
-                score.update(screen)
-                pg.display.update()
-                time.sleep(2)
-
+            hit_coins = pg.sprite.spritecollide(player, coins, False)
+            
+            for coin in hit_coins:
+                coins.remove(coin)
+                score.value += 50
             coins.draw(screen)
 
             score.update(screen)
