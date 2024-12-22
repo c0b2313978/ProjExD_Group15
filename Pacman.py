@@ -240,7 +240,7 @@ class Score:
 
     def update(self, screen: pg.Surface):  
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
-        screen.blit(self.image, self.rect)  
+        screen.blit(self.image, self.rect)  # スコアの描画
 
 
 def draw_start_screen(screen):
