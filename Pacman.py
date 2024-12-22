@@ -74,6 +74,7 @@ class Player(pg.sprite.Sprite):
         """
         パックマンを生成する
         """
+        self.radius = 10
         self.x = 50  # 初期X座標
         self.y = 50  # 初期Y座標
         self.radius = 10  # 円の半径
@@ -240,6 +241,12 @@ def main():
 
             # プレイヤー（黄色の円）を描画
             player.draw(screen)
+
+            for _ in pg.sprite.spritecollide(player, coins, True):
+                score.value += 100
+                score.update(screen)
+                pg.display.update()
+                time.sleep(2)
 
             coins.draw(screen)
 
