@@ -53,16 +53,25 @@ class Map:
                 elif self.map[r][c] == 1:  # 壁（青の四角）
                     pg.draw.rect(screen, (0, 0, 255), (c*GS, r*GS, GS, GS))
 
-    def is_movable(self, x, y):
+    def is_movable(self, rect):
         """
-        (x,y)は移動可能か？
+        rect が移動可能か？
         """
-        # マップ範囲内か？
-        if x < 0 or x > self.COL-1 or y < 0 or y > self.ROW-1:
-            return False
-        # マップチップは移動可能か？
-        if self.map[y][x] == 1:  
-            return False
+        # rect の各辺の座標をタイル座標に変換
+        left_tile = rect.left // GS
+        right_tile = rect.right // GS
+        top_tile = rect.top // GS
+        bottom_tile = rect.bottom // GS
+
+        # マップ範囲外に出ていないかチェック
+        if left_tile < 0 or right_tile >= self.COL or top_tile < 0 or bottom_tile >= self.ROW:
+          return False
+
+        # 各タイルが移動可能かチェック
+        for x in range(left_tile, right_tile + 1):
+           for y in range(top_tile, bottom_tile + 1):
+            if self.map[y][x] == 1: #壁があったら
+                return False
         return True
 
 
@@ -74,18 +83,21 @@ class Player(pg.sprite.Sprite):
         """
         パックマンを生成する
         """
-        
         self.x = 50  # 初期X座標
         self.y = 50  # 初期Y座標
         self.radius = 12 # 円の半径
         self.color = (255, 255, 0)  # 円の色（黄色）
         self.map = game_map  # マップインスタンスを参照する
+        self.image = pg.Surface((self.radius * 2, self.radius * 2))
+        pg.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
+        self.image.set_colorkey((0, 0, 0))
+        self.rect = self.image.get_rect(center = (self.x, self.y)) 
 
     def draw(self, screen):
         """
         プレイヤー（黄色の円）を描画する
         """
-        pg.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        screen.blit(self.image, self.rect)
 
     def can_move(self, next_x, next_y):
         """
@@ -118,31 +130,25 @@ class Player(pg.sprite.Sprite):
         水平移動と垂直移動を分けて処理する
         """
         next_x, next_y = self.x, self.y
+        dx, dy = 0, 0  # 移動量
 
-        # 水平移動
         if keys[pg.K_LEFT]:
-            new_x = self.x - PLAYER_SPEED
-            if self.can_move(new_x, self.y):
-                next_x = new_x
+            dx = -PLAYER_SPEED
         elif keys[pg.K_RIGHT]:
-            new_x = self.x + PLAYER_SPEED
-            if self.can_move(new_x, self.y):
-                next_x = new_x
-
-        # 垂直移動
-        if keys[pg.K_UP]:
-            new_y = self.y - PLAYER_SPEED
-            if self.can_move(next_x, new_y):
-                next_y = new_y
+            dx = PLAYER_SPEED
+        elif keys[pg.K_UP]:
+            dy = -PLAYER_SPEED
         elif keys[pg.K_DOWN]:
-            new_y = self.y + PLAYER_SPEED
-            if self.can_move(next_x, new_y):
-                next_y = new_y
-
-        self.x, self.y = next_x, next_y
-
-    
-
+            dy = PLAYER_SPEED
+        
+        # 移動先のrectを計算
+        next_rect = self.rect.move(dx, dy)
+            
+        # 移動先が移動可能か判定
+        if self.map.is_movable(next_rect):
+            self.x = next_x + dx
+            self.y = next_y + dy
+            self.rect.center = (self.x,self.y)
 
 
 class Enemy:
@@ -168,7 +174,17 @@ class Item(pg.sprite.Sprite):
 
 class Score:
     def __init__(self):
-        pass
+        self.font = pg.font.Font(None, 40)
+        self.color = (255, 255, 255)
+        self.value = 100
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH - 110, HEIGHT - 150
+
+    def update(self, screen: pg.Surface):
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        screen.blit(self.image, self.rect)  
+
 
 def draw_start_screen(screen):
     """
@@ -220,6 +236,7 @@ def main():
     player = Player(d_map)
 
     coins = pg.sprite.Group()
+    score = Score()
     
     for y in range(len(d_map.map)):
         for x in range(len(d_map.map[0])):
@@ -263,12 +280,17 @@ def main():
             # プレイヤー（黄色の円）を描画
             player.draw(screen)
 
+            hit_coins = pg.sprite.spritecollide(player, coins, False)
+            
+            for coin in hit_coins:
+                coins.remove(coin)
+                score.value += 50
             coins.draw(screen)
+
+            score.update(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
-
-
 
 if __name__ == "__main__":
     pg.init()
