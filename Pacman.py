@@ -46,65 +46,109 @@ def get_pixel_pos(grid_x: int, grid_y: int) -> tuple[int, int]:
 
 
 class Map:
-    def __init__(self):
+    """マップの管理を行うクラス"""
+    def __init__(self, map_file: str) -> None:
+        """マップの初期化
+        Args:
+            map_file: マップデータファイルのパス
+        Note:
+            ファイルフォーマット:
+            0: 通路
+            1: 壁
+            2: 通常エサ
+            3: パワーエサ
+            4: 敵のおうち
+            5: ワープトンネル
         """
-        マップの初期化
+        self.dots_remaining = 0  # 残りドット数
+        self.dots_eaten = 0      # 食べたドット数
+        
+        
+        # マップデータの読み込み
+        self.map_data = []
+        with open(map_file, 'r') as f:
+            for line in f:
+                row = [int(cell) for cell in line.strip().split()]
+                self.map_data.append(row)
+        self.height = len(self.map_data)
+        self.width = len(self.map_data[0])
+        
+        # パワーエサとワープトンネルの位置を特定
+        power_pellets = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 3:
+                    power_pellets.append({'x': x, 'y': y})
+        self.power_pellets = power_pellets
+        
+        tunnels = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 5:
+                    tunnels.append({'x': x, 'y': y})
+        self.tunnels = tunnels
+        
+        """プレイフィールドの作成
+        playfield: マップの各マスに対応する辞書の2次元配列
+        各辞書のキー:
+            'path': bool, そのマスが通路であるか
+            'dot': int, そのマスにあるドットの種類 (0: なし, 1: 通常ドット, 2: パワードット)
+            'intersection': bool, そのマスが交差点であるか
+            'tunnel': bool, そのマスがワープトンネルであるか
         """
-        self.map = [
-            [1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1],
-            [1, 0, 0, 0, 0, 1, 0, 0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 0, 1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 0, 1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 1, 0, 1, 0, 0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,1 ,0 ,0 ,1],
-            [1, 1, 0, 0, 0, 1, 1, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,0 ,0 ,1 ,1],
-            [1, 0, 0, 1, 0, 0, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 1, 1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 0 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 1, 0, 1, 1, 1, 0, 1 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 0, 1, 1, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,1 ,1 ,0 ,1 ,0 ,1],
-            [1, 0, 0, 0, 1, 1, 0, 1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,0 ,1],
-            [1, 1, 1, 0, 0, 0, 0, 1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,1 ,1],
-            [1, 0, 0, 0, 1, 1, 0, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 0, 0, 0, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,1],
-            [1, 0, 1, 0, 1, 1, 0, 1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1],
-        ]
-        self.ROW,self.COL = len(self.map),len(self.map[0])
+        playfield = []
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                cell = {
+                    'path': self.map_data[y][x] in [0, 2, 3, 4, 5],
+                    'dot': 1 if self.map_data[y][x] == 2 else 2 if self.map_data[y][x] == 3 else 0,
+                    'intersection': False,
+                    'tunnel': self.map_data[y][x] == 5
+                }
+                if cell['dot'] > 0:
+                    self.dots_remaining += 1
+                row.append(cell)
+            playfield.append(row)
+        
+        # 交差点の判定
+        for y in range(1, self.height - 1):
+            for x in range(1, self.width - 1):
+                if playfield[y][x]['path']:
+                    paths = 0
+                    if playfield[y-1][x]['path']: paths += 1
+                    if playfield[y+1][x]['path']: paths += 1
+                    if playfield[y][x-1]['path']: paths += 1
+                    if playfield[y][x+1]['path']: paths += 1
+                    playfield[y][x]['intersection'] = paths > 2
+        self.playfield = playfield
 
-    def draw_map(self, screen):
+        # 敵の初期位置を特定
+        self.enemy_start_positions = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 4:
+                    self.enemy_start_positions.append((x, y))
+    
+    def draw(self, screen: pg.Surface, field_start: tuple[int, int]) -> None:
+        """マップを描画する
+        Args:
+            screen: 描画対象の画面
+            field_start: フィールドの開始座標(x, y)
         """
-        マップを描画する
-        """
-        for r in range(self.ROW):
-            for c in range(self.COL):
-                if self.map[r][c] == 0: # 道（緑の四角）
-                    pg.draw.rect(screen, (0, 255, 0), (c*GS, r*GS, GS, GS))
-                elif self.map[r][c] == 1:  # 壁（青の四角）
-                    pg.draw.rect(screen, (0, 0, 255), (c*GS, r*GS, GS, GS))
-
-    def is_movable(self, rect):
-        """
-        rect が移動可能か？
-        """
-        # rect の各辺の座標をタイル座標に変換
-        left_tile = rect.left // GS
-        right_tile = rect.right // GS
-        top_tile = rect.top // GS
-        bottom_tile = rect.bottom // GS
-
-        # マップ範囲外に出ていないかチェック
-        if left_tile < 0 or right_tile >= self.COL or top_tile < 0 or bottom_tile >= self.ROW:
-          return False
-
-        # 各タイルが移動可能かチェック
-        for x in range(left_tile, right_tile + 1):
-           for y in range(top_tile, bottom_tile + 1):
-            if self.map[y][x] == 1: #壁があったら
-                return False
-        return True
+        colors = {
+            0: (0, 0, 0),      # 通路: 黒
+            1: (54, 67, 100),  # 壁: 青
+            4: (255, 192, 203) # ゴーストの家の入り口: ピンク
+        }
+        
+        for y, row in enumerate(self.map_data):
+            for x, cell in enumerate(row):
+                rect_x = field_start[0] + (x * GRID_SIZE)
+                rect_y = field_start[1] + (y * GRID_SIZE)
+                
+                if cell in colors:
+                    pg.draw.rect(screen, colors[cell], (rect_x, rect_y, GRID_SIZE, GRID_SIZE))
 
 
 class Player(pg.sprite.Sprite):
