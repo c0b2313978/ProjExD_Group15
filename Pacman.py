@@ -734,7 +734,7 @@ class Enemy(pg.sprite.Sprite):
 
 class Item(pg.sprite.Sprite):
     """アイテム（エサ）の管理クラス"""
-    def __init__(self, grid_pos: tuple[int, int], item_type: int) -> None:
+    def __init__(self, grid_pos: tuple[int, int], item_type: int, score: 'Score') -> None:
         """アイテムの初期化
         Args:
             grid_pos: グリッド座標(x, y)
@@ -744,6 +744,7 @@ class Item(pg.sprite.Sprite):
         self.image = pg.Surface((GRID_SIZE, GRID_SIZE), pg.SRCALPHA)
         self.grid_pos = grid_pos
         self.item_type = item_type
+        self.score = score
         
         center_x = GRID_SIZE // 2
         center_y = GRID_SIZE // 2
@@ -766,6 +767,7 @@ class Item(pg.sprite.Sprite):
         プレイヤーと衝突したらkillする
         """
         if pg.sprite.collide_rect(self, player):
+            self.score.value += 10  # エサを食べたらscore+10
             self.kill()
 
 class Score:
@@ -779,9 +781,9 @@ class Score:
         self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
-        self.rect.center = WIDTH - 110, HEIGHT - 150
+        self.rect.center = WIDTH - 110, HEIGHT - 50
 
-    def update(self, screen: pg.Surface):  
+    def draw(self, screen: pg.Surface):  
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)  
 
@@ -884,6 +886,7 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     map_data = Map("map2.txt")
     player = Player((1, 1), map_data)
+    score = Score()
     start = True  
 
     # エサんｐグループを作成
@@ -891,7 +894,7 @@ def main():
     for x in range(map_data.height):
         for y in range(map_data.width):
             if map_data.playfield[x][y]["dot"] in [1, 2]:
-                baits.add(Item((y, x), map_data.playfield[x][y]["dot"]))
+                baits.add(Item((y, x), map_data.playfield[x][y]["dot"], score))
 
     # 敵のグループを作成
     enemies = pg.sprite.Group()
@@ -923,7 +926,6 @@ def main():
             # map_data.draw(screen, (WIDTH//2 - map_data.width*GRID_SIZE//2, HEIGHT//2 - map_data.height*GRID_SIZE//2))
             map_data.draw(screen, (0, 0))
 
-            # エサの描画と更新
             baits.draw(screen)
             baits.update(player)
 
@@ -940,6 +942,9 @@ def main():
             # デバッグ情報の更新と描画
             debug_info.update()
             debug_info.draw(screen)
+
+            # スコアの描画
+            score.draw(screen)
 
             # パワーエサの処理
             for bait in baits:
