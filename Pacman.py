@@ -745,6 +745,7 @@ class Item(pg.sprite.Sprite):
         self.grid_pos = grid_pos
         self.item_type = item_type
         self.score = score
+        self.eat_count = 0
         
         center_x = GRID_SIZE // 2
         center_y = GRID_SIZE // 2
@@ -767,13 +768,14 @@ class Item(pg.sprite.Sprite):
         プレイヤーと衝突したらkillする
         """
         if pg.sprite.collide_rect(self, player):
-            self.score.value += 10  # エサを食べたらscore+10
+            self.score.value += 20  # エサを食べたらscore+20
             self.kill()
+            self.eat_count += 1
+
 
 class Score:
     """
     コインを獲得したときスコアとして表示するクラス
-    コイン1枚：50点
     """
     def __init__(self):
         self.font = pg.font.Font(None, 40)  # サイズは40
