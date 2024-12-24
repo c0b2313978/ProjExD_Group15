@@ -154,14 +154,12 @@ class Map:
 
 
 class Player(pg.sprite.Sprite):
-    def __init__(self, grid_pos: tuple[int, int], map_data: 'Map') -> None:
-        """プレイヤーの初期化
-        Args:
-            grid_pos: グリッド座標(x, y)
-            map_data: マップデータ
-        """
+    def __init__(self, grid_pos: tuple[int, int], map_data: Map):
         super().__init__()
+        self.grid_pos = grid_pos
         self.map_data = map_data
+        self.lives = 3  # 残機の初期値
+        self.font = pg.font.Font(None, 30)
 
         # 画像関連の初期化
         self.original_images = [
@@ -192,6 +190,19 @@ class Player(pg.sprite.Sprite):
         self.can_warp = True  # ワープ可能かどうかのフラグ
         self.last_warp_pos = None  # 最後にワープした位置
         self.warp_cells = [tuple(cell.values()) for cell in map_data.tunnels]
+
+    def reset_position(self): 
+        """
+        プレイヤーの位置を初期位置に戻す
+        """
+        self.rect.center = get_pixel_pos(*self.grid_pos)  # 初期位置に設定
+        self.current_direction = None  # 移動方向をリセット
+        self.moving = False
+        
+        
+
+        
+
     
     def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
         """キー入力を処理
@@ -366,7 +377,12 @@ class Player(pg.sprite.Sprite):
         Args:
             screen: 描画先のスクリーン
         """
+        # プレイヤーの画像を描画
         screen.blit(self.image, self.rect)
+
+    # 残機数を描画
+        lives_text = self.font.render(f"Life: {self.lives}", True, (255, 255, 255))  # 白色のテキスト
+        screen.blit(lives_text, (20, 0))  # 左上の座標(20, 20)に描画
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
@@ -384,6 +400,32 @@ class Player(pg.sprite.Sprite):
         """
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
+    
+    # def game_over(screen: pg.Surface):
+    #     """
+    #     ゲームオーバー画面を表示
+    #     """
+    #     font = pg.font.Font(None, 60)
+    #     game_over_text = font.render("GAME OVER", True, (255, 0, 0))
+    #     retry_text = font.render("Press R to Retry or Q to Quit", True, WHITE)
+
+    #     screen.fill((0, 0, 0))
+    #     screen.blit(game_over_text, (WIDTH // 2 - 150, HEIGHT // 2 - 50))
+    #     screen.blit(retry_text, (WIDTH // 2 - 200, HEIGHT // 2 + 20))
+    #     pg.display.update()
+
+    #     while True:
+    #         for event in pg.event.get():
+    #             if event.type == pg.QUIT:
+    #                 pg.quit()
+    #                 sys.exit()
+    #             if event.type == pg.KEYDOWN:
+    #                 if event.key == pg.K_r:
+    #                     main()  # ゲームを再スタート
+    #                 if event.key == pg.K_q:
+    #                     pg.quit()
+    #                     sys.exit()
+
 
 
 class EnemyMode(Enum):
@@ -405,20 +447,34 @@ class Enemy(pg.sprite.Sprite):
         self.enemy_id = enemy_id
         self.player = player
         self.map_data = map_data
+
+        image_idex = [0, 4, 5, 7]
         
         # 画像の読み込みとスケーリング
-        self.normal_image = pg.transform.scale(
-            pg.image.load(f"fig/{enemy_id}.png").convert_alpha(), 
+        self.normal_image_base = pg.transform.scale(
+            pg.image.load(f"fig/{image_idex[enemy_id-1]}.png").convert_alpha(), 
             (ENEMY_SIZE, ENEMY_SIZE)
         )
-        self.weak_image = pg.transform.scale(
-            pg.image.load("fig/chicken.png").convert_alpha(), 
-            (ENEMY_SIZE, ENEMY_SIZE)
-        )
+        self.normal_image_lst = {
+            (-1, 0): self.normal_image_base,  # 左向き
+            (1, 0): pg.transform.flip(self.normal_image_base, True, False),  #右向き
+            (0, -1): self.normal_image_base,  # 上向き
+            # (0, -1): pg.transform.rotozoom(self.normal_image_base, -90, 1),  # 上向き
+            (0, 1): pg.transform.rotozoom(self.normal_image_base, 90, 1)}  # 下向き
+        self.normal_image = self.normal_image_lst[(1, 0)]
+
+        self.weak_images = [
+            pg.transform.scale(pg.image.load("fig/chicken.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            pg.transform.scale(pg.image.load("fig/food_christmas_chicken.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            pg.transform.scale(pg.image.load("fig/chicken_honetsuki.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            ]
+        self.current_weak_image = None  # 現在選択中のweak画像
+
         self.eaten_image = pg.transform.scale(
             pg.image.load("fig/pet_hone.png").convert_alpha(), 
             (ENEMY_SIZE, ENEMY_SIZE)
         )
+        
         self.image = self.normal_image
         self.rect = self.image.get_rect()
         
@@ -503,8 +559,8 @@ class Enemy(pg.sprite.Sprite):
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
-                # TODO: プレイヤーへのダメージ処理をここに実装
-                pass
+                self.player.reset_position()  # プレイヤーへのダメージ処理をここに実装
+                self.player.lives -= 1
 
     def get_target_position(self) -> tuple[int, int]:
         """現在のモードに応じた目標位置を取得
@@ -596,13 +652,31 @@ class Enemy(pg.sprite.Sprite):
             # 目標地点まで移動
             direction.scale_to_length(self.speed)
             self.rect.center = tuple(current + direction)
+        
+        # 移動方向に応じて画像を更新
+        if not self.is_eaten and self.mode != EnemyMode.WEAK:
+            dx = 1 if direction.x > 0 else -1 if direction.x < 0 else 0
+            dy = 1 if direction.y > 0 else -1 if direction.y < 0 else 0
+            
+            # x方向の移動が y方向より大きい場合
+            if abs(direction.x) > abs(direction.y):
+                direction_key = (dx, 0)
+            else:
+                direction_key = (0, dy)
+                
+            if direction_key in self.normal_image_lst:
+                self.normal_image = self.normal_image_lst[direction_key]
+                self.image = self.normal_image
 
     def make_weak(self) -> None:
         """弱体化モードに移行"""
         if not self.is_eaten:
             self.mode = EnemyMode.WEAK
             self.weak_start_time = time.time()
-            self.image = self.weak_image
+            # まだweak画像が選択されていない場合のみ、ランダムに選択
+            if self.current_weak_image is None:
+                self.current_weak_image = random.choice(self.weak_images)
+            self.image = self.current_weak_image
             self.speed = self.default_speed * 0.8  # 速度を20%減少
 
     def get_eaten(self) -> None:
@@ -622,6 +696,7 @@ class Enemy(pg.sprite.Sprite):
         self.mode_timer = time.time()
         self.current_path = []
         self.moving = False
+        self.current_weak_image = None  # weak画像の選択をリセット
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
@@ -883,6 +958,28 @@ def draw_start_screen(screen):
     copyright_text = font_copyright.render("(c) 2024 Group15", True, (255, 255, 255))
     screen.blit(copyright_text, (WIDTH - copyright_text.get_width() - 10, HEIGHT - copyright_text.get_height() - 10))
 
+def draw_game_over(screen):
+    """
+    ゲームオーバー画面を描画する関数
+    """
+    font=pg.font.Font(None,74)
+    game_text=font.render("GAME",True,WHITE)
+    over_text=font.render("OVER",True,WHITE)
+
+    screen_center_x=WIDTH//2
+    screen_center_y=HEIGHT//2
+
+    game_rect = game_text.get_rect(centerx=screen_center_x, centery=screen_center_y - 50)
+    over_rect = over_text.get_rect(centerx=screen_center_x, centery=screen_center_y + 50)
+    
+    screen.blit(game_text, game_rect)
+    screen.blit(over_text, over_rect)
+    
+    # パックマンの画像を"GAME"と"OVER"の間に描画
+    pacman_image = pg.transform.scale(pg.image.load("fig/pac-man1.png").convert_alpha(), (50, 50))
+    pacman_rect = pacman_image.get_rect(center=(screen_center_x, screen_center_y))
+    screen.blit(pacman_image, pacman_rect)
+    
 
 def main():
     pg.display.set_caption("Pacman")
