@@ -76,131 +76,236 @@ class Map:
 
 
 class Player(pg.sprite.Sprite):
-    """
-    ゲームキャラクター（パックマン）に関するクラス
-    """
-    def __init__(self, game_map):
-        """
-        パックマンを生成する
+    def __init__(self, grid_pos: tuple[int, int], map_data: 'Map') -> None:
+        """プレイヤーの初期化
+        Args:
+            grid_pos: グリッド座標(x, y)
+            map_data: マップデータ
         """
         super().__init__()
-        self.x = 50  # 初期X座標
-        self.y = 50  # 初期Y座標
-        self.radius = 12 # 円の半径
-        self.color = (255, 255, 0)  # 円の色（黄色）
-        self.map = game_map  # マップインスタンスを参照する
-        self.image = pg.Surface((self.radius * 2, self.radius * 2))
-        pg.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
-        self.image.set_colorkey((0, 0, 0))
-        self.rect = self.image.get_rect(center=(self.x, self.y)) 
-        self.last_direction = None  #最後に押された方向を保持
-        self.next_direction = None
+        self.map_data = map_data
 
-    def draw(self, screen):
+        # 画像関連の初期化
+        self.original_images = [
+            pg.transform.scale(pg.image.load("fig/pac-man1.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)),
+            pg.transform.scale(pg.image.load("fig/pac-man2.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE))
+        ]
+        self.current_frame = 0  # 現在のアニメーションフレーム
+        self.animation_counter = 0  # アニメーション用カウンター
+        self.animation_speed = 5
+        self.image = self.original_images[0]
+        self.rect = self.image.get_rect()  # rect属性を初期化
+
+        # 位置関連
+        self.rect.center = get_pixel_pos(*grid_pos)  # 初期位置を設定
+        self.target_pos = self.rect.center
+        self.moving = False
+
+        # 移動関連
+        self.current_direction = None  # 現在の移動方向
+        self.queued_direction = None  # 次の曲がり角で進みたい方向
+
+        # 回転関連
+        self.angle = 0  # 現在の角度
+        self.target_angle = 0  # 目標の角度
+        self.rotation_speed = 45  # 回転速度
+
+        # ワープ関連の変数
+        self.can_warp = True  # ワープ可能かどうかのフラグ
+        self.last_warp_pos = None  # 最後にワープした位置
+        self.warp_cells = [tuple(cell.values()) for cell in map_data.tunnels]
+    
+    def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
+        """キー入力を処理
+        Args:
+            keys: キー入力の状態
         """
-        プレイヤー（黄色の円）を描画する
+        new_direction = None
+        
+        # 新しい入力方向を取得
+        if keys[pg.K_LEFT]:
+            new_direction = (-1, 0)
+        elif keys[pg.K_RIGHT]:
+            new_direction = (1, 0)
+        elif keys[pg.K_UP]:
+            new_direction = (0, -1)
+        elif keys[pg.K_DOWN]:
+            new_direction = (0, 1)
+        
+        # 新しい入力があれば保存
+        if new_direction:
+            self.queued_direction = new_direction
+            
+            # 移動中でなければ、即座に移動を試みる
+            # 移動中なら、updateメソッドで次の交差点に到達した時に方向転換を試みる
+            if not self.moving:
+                self.try_move(new_direction)
+    
+    def try_move(self, direction: tuple[int, int]) -> bool:
+        """指定された方向への移動を試みる。移動可能であれば移動処理を行いTrueを返す。
+        Args:
+            direction: 移動方向(x, y)
+        Returns:
+            移動可能であればTrue, そうでなければFalse
+        """
+        current_pos = self.get_grid_pos()  # 現在のグリッド座標を取得
+        next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])  # 次のグリッド座標を計算
+
+        if not self.is_valid_move(next_pos):  # 次の座標が移動可能か確認
+            return False
+
+        # ワープトンネルの処理
+        if self.map_data.playfield[next_pos[1]][next_pos[0]]['tunnel'] and self.can_warp:
+            warp_pos = self.get_warp_destination(next_pos)  # ワープ先の座標を取得
+            if warp_pos:
+                self.rect.center = get_pixel_pos(*warp_pos)  # プレイヤーをワープ
+                self.target_pos = self.rect.center  # 目標位置を更新
+                self.last_warp_pos = warp_pos  # 最後にワープした位置を記録
+                self.can_warp = False
+
+                next_pos = (warp_pos[0] + direction[0], warp_pos[1] + direction[1])  # ワープ後の次の移動先を計算
+                if not self.is_valid_move(next_pos):  # ワープ後の移動先が有効か確認
+                    return False
+
+        self.current_direction = direction  # 移動方向を更新
+        self.target_pos = get_pixel_pos(*next_pos)  # 目標位置を更新
+        self.moving = True
+        self.update_rotation(direction)  # プレイヤーの回転を更新
+        return True  # 移動処理が完了したのでTrueを返す
+
+    def update_rotation(self, direction: tuple[int, int]) -> None:
+        """移動方向に応じて回転角度を設定
+        Args:
+            direction: 移動方向(x, y)
+        """
+        new_angle = 0
+        if direction[0] > 0:
+            new_angle = 0  # 右
+        elif direction[0] < 0:
+            new_angle = 180  # 左
+        elif direction[1] > 0:
+            new_angle = 90  # 下
+        elif direction[1] < 0:
+            new_angle = 270  # 上
+        
+        angle_diff = (new_angle - self.angle) % 360
+        if abs(angle_diff) == 180:
+            self.angle = new_angle
+            self.target_angle = new_angle
+        else:
+            if angle_diff > 180:
+                angle_diff -= 360
+            self.target_angle = self.angle + angle_diff
+
+    def is_valid_move(self, grid_pos: tuple[int, int]) -> bool:
+        """指定されたグリッド座標が移動可能か判定
+        Args:
+            grid_pos: 判定するグリッド座標(x, y)
+        Returns:
+            移動可能であればTrue, そうでなければFalse
+        """
+        grid_x, grid_y = grid_pos
+        return self.map_data.playfield[grid_y][grid_x]['path']
+    
+    def get_warp_destination(self, current_pos: tuple[int, int]) -> tuple[int, int]:
+        """ワープ先の座標を取得
+        Args:
+            current_pos: 現在のグリッド座標(x, y)
+        Returns:
+            ワープ先のグリッド座標(x, y), ワープ先がない場合はNone
+        """
+        if self.last_warp_pos == current_pos:
+            return None
+        
+        # 現在位置以外のワープトンネルを探す
+        for cell in self.warp_cells:
+            if cell != current_pos and cell != self.last_warp_pos:
+                return cell
+        return None
+
+    def update(self) -> None:
+        """プレイヤーの位置を更新"""
+        if self.moving:
+            # 目標位置に到達したかチェック
+            dx = self.target_pos[0] - self.rect.centerx
+            dy = self.target_pos[1] - self.rect.centery
+            
+            if abs(dx) <= PLAYER_SPEED and abs(dy) <= PLAYER_SPEED:
+                self.rect.center = self.target_pos
+                self.moving = False
+
+                # 次の移動を処理
+                if self.queued_direction:
+                    # まず待機中の方向に移動を試みる
+                    if not self.try_move(self.queued_direction):
+                        # できない場合は現在の方向に継続
+                        if self.current_direction:
+                            self.try_move(self.current_direction)
+                elif self.current_direction:
+                    # 待機方向がない場合は現在の方向に継続
+                    self.try_move(self.current_direction)
+
+                # 移動完了時にワープ可能フラグを更新
+                current_pos = self.get_grid_pos()
+                if not self.is_tunnel_position(current_pos):
+                    self.can_warp = True
+                    self.last_warp_pos = None
+
+            else:
+                # 移動を継続
+                move_x = PLAYER_SPEED * (1 if dx > 0 else -1 if dx < 0 else 0)  # 目標位置が右にあれば正の速度、左にあれば負の速度、同じなら0
+                move_y = PLAYER_SPEED * (1 if dy > 0 else -1 if dy < 0 else 0)  # 目標位置が下にあれば正の速度、上にあれば負の速度、同じなら0
+                self.rect.centerx += move_x
+                self.rect.centery += move_y
+                
+        # 角度を更新
+        if self.angle != self.target_angle:
+            angle_diff = self.target_angle - self.angle
+            if abs(angle_diff) <= self.rotation_speed:
+                self.angle = self.target_angle
+            else:
+                self.angle += self.rotation_speed if angle_diff > 0 else -self.rotation_speed
+        
+        # アニメーションを更新
+        self.update_animation()
+        
+        # 現在の角度に基づいて画像を回転
+        self.image = pg.transform.rotate(self.original_images[self.current_frame], -self.angle)
+    
+    def update_animation(self) -> None:
+        """アニメーションフレームを更新"""
+        if self.moving:
+            self.animation_counter += 1
+            if self.animation_counter >= self.animation_speed: # アニメーション速度調整
+                self.animation_counter = 0
+                self.current_frame = (self.current_frame + 1) % 2
+        else:
+            self.current_frame = 0
+            self.animation_counter = 0
+    
+    def draw(self, screen: pg.Surface) -> None:
+        """プレイヤーを描画
+        Args:
+            screen: 描画先のスクリーン
         """
         screen.blit(self.image, self.rect)
 
-    def can_move(self, next_x, next_y):
+    def get_grid_pos(self) -> tuple[int, int]:
+        """現在のグリッド座標を取得
+        Returns:
+            現在のグリッド座標(x, y)
         """
-        プレイヤーが半径分考慮して、(next_x, next_y)に移動可能かチェックする関数
-        複数点チェックでめり込みを防ぐ
-        """
-        r = self.radius
-        # チェックする相対位置(プレイヤー円周を囲むポイント群)
-        check_offsets = [
-            (-r, 0),
-            (r, 0),
-            (0, -r),
-            (0, r),
-            (-r, -r),
-            (r, -r),
-            (-r, r),
-            (r, r)
-        ]
-        
-        for ox, oy in check_offsets:
-            tile_x = (next_x + ox) // GS
-            tile_y = (next_y + oy) // GS
-            if not self.map.is_movable(tile_x, tile_y):
-                return False
-        return True
+        return (self.rect.centerx // GRID_SIZE, self.rect.centery // GRID_SIZE)
     
-    def is_at_corner(self):
+    def is_tunnel_position(self, pos: tuple[int, int]) -> bool:
+        """指定された位置がワープトンネルかどうかを判定
+        Args:
+            pos: グリッド座標(x, y)
+        Returns:
+            ワープトンネルであればTrue, そうでなければFalse
         """
-        プレイヤーが角にいるかどうかを判定
-        """
-        r = self.radius
-        check_offsets = [
-            (-r, 0),
-            (r, 0),
-            (0, -r),
-            (0, r),
-        ]
-        
-        #移動できる方向をカウント
-        possible_directions = 0
-        for dx,dy in check_offsets:
-          next_rect=self.rect.move(dx,dy)
-          if self.map.is_movable(next_rect):
-              possible_directions += 1
-
-        # 2方向以上移動可能なら角とみなす
-        return possible_directions >= 3
-
-    def move(self, keys):
-        """
-        キー入力に応じてプレイヤーを移動させる
-        """
-        dx, dy = 0, 0  # 移動量
-
-        # 現在の方向のまま進むための移動量
-        if self.last_direction == "left":
-            dx, dy = -PLAYER_SPEED, 0
-        elif self.last_direction == "right":
-            dx, dy = PLAYER_SPEED, 0
-        elif self.last_direction == "up":
-            dx, dy = 0, -PLAYER_SPEED
-        elif self.last_direction == "down":
-            dx, dy = 0, PLAYER_SPEED
-
-        # 次の方向の移動をチェック
-        if self.next_direction:
-            temp_dx, temp_dy = 0, 0
-            if self.next_direction == "left":
-                temp_dx, temp_dy = -PLAYER_SPEED, 0
-            elif self.next_direction == "right":
-                temp_dx, temp_dy = PLAYER_SPEED, 0
-            elif self.next_direction == "up":
-                temp_dx, temp_dy = 0, -PLAYER_SPEED
-            elif self.next_direction == "down":
-                temp_dx, temp_dy = 0, PLAYER_SPEED
-
-            # 次の方向が移動可能なら方向転換
-            if self.map.is_movable(self.rect.move(temp_dx, temp_dy)):
-                self.last_direction = self.next_direction
-                dx, dy = temp_dx, temp_dy
-                self.next_direction = None
-
-        # 現在の方向で移動可能か判定
-        next_rect = self.rect.move(dx, dy)
-        if self.map.is_movable(next_rect):
-            self.rect = next_rect
-            self.x, self.y = self.rect.center
-        else:
-            # 現在の方向で動けない場合は停止
-            dx, dy = 0, 0
-
-        # キー入力を次の方向として記録
-        if keys[pg.K_LEFT]:
-            self.next_direction = "left"
-        elif keys[pg.K_RIGHT]:
-            self.next_direction = "right"
-        elif keys[pg.K_UP]:
-            self.next_direction = "up"
-        elif keys[pg.K_DOWN]:
-            self.next_direction = "down"
+        x, y = pos
+        return self.map_data.playfield[y][x]['tunnel']
 
 
 class Enemy(pg.sprite.Sprite):
