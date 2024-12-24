@@ -22,25 +22,30 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 def get_grid_pos(pixel_x: int, pixel_y: int) -> tuple[int, int]:
-    """現在のグリッド座標を返す"""
+    """現在のグリッド座標を返す
+    Args:
+        pixel_x: ピクセルX座標
+        pixel_y: ピクセルY座標
+    Returns:
+        現在のグリッド座標(x, y)
+    """
     return pixel_x // GRID_SIZE, pixel_y // GRID_SIZE
 
 
 def get_pixel_pos(grid_x: int, grid_y: int) -> tuple[int, int]:
-    """グリッド座標からピクセル座標を計算して返す"""
+    """グリッド座標からピクセル座標を計算して返す
+    Args:
+        grid_x: グリッドX座標
+        grid_y: グリッドY座標
+    Returns:
+        ピクセル座標(x, y)
+    """
     pixel_x = grid_x * GRID_SIZE + GRID_SIZE // 2
     pixel_y = grid_y * GRID_SIZE + GRID_SIZE // 2
     return pixel_x, pixel_y
 
 
 class Player(pg.sprite.Sprite):
-    delta = {  # 押下キーと移動量の辞書
-        pg.K_UP: (0, -1),
-        pg.K_DOWN: (0, +1),
-        pg.K_LEFT: (-1, 0),
-        pg.K_RIGHT: (+1, 0),
-    }
-
     def __init__(self, grid_pos: tuple[int, int], map_data: 'Map') -> None:
         """プレイヤーの初期化
         Args:
@@ -50,6 +55,7 @@ class Player(pg.sprite.Sprite):
         super().__init__()
         self.map_data = map_data
 
+        # 画像関連の初期化
         self.original_images = [
             pg.transform.scale(pg.image.load("fig/pac-man1.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)),
             pg.transform.scale(pg.image.load("fig/pac-man2.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE))
@@ -60,72 +66,106 @@ class Player(pg.sprite.Sprite):
         self.image = self.original_images[0]
         self.rect = self.image.get_rect()  # rect属性を初期化
 
+        # 位置関連
         self.rect.center = get_pixel_pos(*grid_pos)  # 初期位置を設定
         self.target_pos = self.rect.center
         self.moving = False
+
+        # 移動関連
+        self.current_direction = None  # 現在の移動方向
+        self.queued_direction = None  # 次の曲がり角で進みたい方向
+
+        # 回転関連
         self.angle = 0  # 現在の角度
         self.target_angle = 0  # 目標の角度
-        self.rotation_speed = 30  # 回転速度
+        self.rotation_speed = 45  # 回転速度
 
-        # ワープ関連の変数を追加
+        # ワープ関連の変数
         self.can_warp = True  # ワープ可能かどうかのフラグ
         self.last_warp_pos = None  # 最後にワープした位置
         self.warp_cells = [tuple(cell.values()) for cell in map_data.tunnels]
     
-    def move_to_grid(self, grid_pos: tuple[int, int]) -> None:
-        """指定されたグリッド座標へ移動を開始
-        
+    def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
+        """キー入力を処理
         Args:
-            grid_pos: 移動先のグリッド座標(x, y)
+            keys: キー入力の状態
         """
-        if not self.moving and self.is_valid_move(grid_pos):
-            # 現在の移動方向を保存（ワープ時の向き維持用）
-            dx = grid_pos[0] - self.get_grid_pos()[0]
-            dy = grid_pos[1] - self.get_grid_pos()[1]
-            current_direction = (dx, dy)
+        new_direction = None
+        
+        # 新しい入力方向を取得
+        if keys[pg.K_LEFT]:
+            new_direction = (-1, 0)
+        elif keys[pg.K_RIGHT]:
+            new_direction = (1, 0)
+        elif keys[pg.K_UP]:
+            new_direction = (0, -1)
+        elif keys[pg.K_DOWN]:
+            new_direction = (0, 1)
+        
+        # 新しい入力があれば保存
+        if new_direction:
+            self.queued_direction = new_direction
             
-            # ワープトンネルの処理
-            if self.map_data.playfield[grid_pos[1]][grid_pos[0]]['tunnel'] and self.can_warp:
-                warp_pos = self.get_warp_destination(grid_pos)
-                if warp_pos:
-                    # 瞬時にワープ
-                    self.rect.center = get_pixel_pos(*warp_pos)
-                    self.target_pos = self.rect.center
-                    self.last_warp_pos = warp_pos
-                    self.can_warp = False
-                    
-                    # ワープ後の次の移動先を設定
-                    next_x = warp_pos[0] + current_direction[0]
-                    next_y = warp_pos[1] + current_direction[1]
-                    if self.is_valid_move((next_x, next_y)):
-                        grid_pos = (next_x, next_y)
-                    else:
-                        return
-            
-            self.target_pos = get_pixel_pos(*grid_pos)
-            self.moving = True
-            
-            # 移動方向に応じて角度を設定（ワープ時は向きを変えない）
-            if not (self.map_data.playfield[grid_pos[1]][grid_pos[0]]['tunnel'] and self.can_warp):
-                new_angle = 0
-                if dx > 0:
-                    new_angle = 0  # 右
-                elif dx < 0:
-                    new_angle = 180  # 左
-                elif dy > 0:
-                    new_angle = 90  # 下
-                elif dy < 0:
-                    new_angle = 270  # 上
-                
-                # 角度の差分を計算
-                angle_diff = (new_angle - self.angle) % 360
-                if abs(angle_diff) == 180:
-                    self.angle = new_angle
-                    self.target_angle = new_angle
-                else:
-                    if angle_diff > 180:
-                        angle_diff -= 360
-                    self.target_angle = self.angle + angle_diff
+            # 移動中でなければ、即座に移動を試みる
+            # 移動中なら、updateメソッドで次の交差点に到達した時に方向転換を試みる
+            if not self.moving:
+                self.try_move(new_direction)
+    
+    def try_move(self, direction: tuple[int, int]) -> bool:
+        """指定された方向への移動を試みる。移動可能であれば移動処理を行いTrueを返す。
+        Args:
+            direction: 移動方向(x, y)
+        Returns:
+            移動可能であればTrue, そうでなければFalse
+        """
+        current_pos = self.get_grid_pos()  # 現在のグリッド座標を取得
+        next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])  # 次のグリッド座標を計算
+
+        if not self.is_valid_move(next_pos):  # 次の座標が移動可能か確認
+            return False
+
+        # ワープトンネルの処理
+        if self.map_data.playfield[next_pos[1]][next_pos[0]]['tunnel'] and self.can_warp:
+            warp_pos = self.get_warp_destination(next_pos)  # ワープ先の座標を取得
+            if warp_pos:
+                self.rect.center = get_pixel_pos(*warp_pos)  # プレイヤーをワープ
+                self.target_pos = self.rect.center  # 目標位置を更新
+                self.last_warp_pos = warp_pos  # 最後にワープした位置を記録
+                self.can_warp = False
+
+                next_pos = (warp_pos[0] + direction[0], warp_pos[1] + direction[1])  # ワープ後の次の移動先を計算
+                if not self.is_valid_move(next_pos):  # ワープ後の移動先が有効か確認
+                    return False
+
+        self.current_direction = direction  # 移動方向を更新
+        self.target_pos = get_pixel_pos(*next_pos)  # 目標位置を更新
+        self.moving = True
+        self.update_rotation(direction)  # プレイヤーの回転を更新
+        return True  # 移動処理が完了したのでTrueを返す
+
+    def update_rotation(self, direction: tuple[int, int]) -> None:
+        """移動方向に応じて回転角度を設定
+        Args:
+            direction: 移動方向(x, y)
+        """
+        new_angle = 0
+        if direction[0] > 0:
+            new_angle = 0  # 右
+        elif direction[0] < 0:
+            new_angle = 180  # 左
+        elif direction[1] > 0:
+            new_angle = 90  # 下
+        elif direction[1] < 0:
+            new_angle = 270  # 上
+        
+        angle_diff = (new_angle - self.angle) % 360
+        if abs(angle_diff) == 180:
+            self.angle = new_angle
+            self.target_angle = new_angle
+        else:
+            if angle_diff > 180:
+                angle_diff -= 360
+            self.target_angle = self.angle + angle_diff
 
     def is_valid_move(self, grid_pos: tuple[int, int]) -> bool:
         """指定されたグリッド座標が移動可能か判定
@@ -138,28 +178,42 @@ class Player(pg.sprite.Sprite):
         return self.map_data.playfield[grid_y][grid_x]['path']
     
     def get_warp_destination(self, current_pos: tuple[int, int]) -> tuple[int, int]:
-        """ワープ先の座標を取得"""
+        """ワープ先の座標を取得
+        Args:
+            current_pos: 現在のグリッド座標(x, y)
+        Returns:
+            ワープ先のグリッド座標(x, y), ワープ先がない場合はNone
+        """
         if self.last_warp_pos == current_pos:
             return None
         
         # 現在位置以外のワープトンネルを探す
-        for y in range(self.map_data.height):
-            for x in range(self.map_data.width):
-                if (self.map_data.playfield[y][x]['tunnel'] and 
-                    (x, y) != current_pos and 
-                    (x, y) != self.last_warp_pos):
-                    return (x, y)
+        for cell in self.warp_cells:
+            if cell != current_pos and cell != self.last_warp_pos:
+                return cell
         return None
 
     def update(self) -> None:
         """プレイヤーの位置を更新"""
         if self.moving:
+            # 目標位置に到達したかチェック
             dx = self.target_pos[0] - self.rect.centerx
             dy = self.target_pos[1] - self.rect.centery
             
             if abs(dx) <= PLAYER_SPEED and abs(dy) <= PLAYER_SPEED:
                 self.rect.center = self.target_pos
                 self.moving = False
+
+                # 次の移動を処理
+                if self.queued_direction:
+                    # まず待機中の方向に移動を試みる
+                    if not self.try_move(self.queued_direction):
+                        # できない場合は現在の方向に継続
+                        if self.current_direction:
+                            self.try_move(self.current_direction)
+                elif self.current_direction:
+                    # 待機方向がない場合は現在の方向に継続
+                    self.try_move(self.current_direction)
 
                 # 移動完了時にワープ可能フラグを更新
                 current_pos = self.get_grid_pos()
@@ -168,14 +222,12 @@ class Player(pg.sprite.Sprite):
                     self.last_warp_pos = None
 
             else:
-                move_x = PLAYER_SPEED if dx > 0 else -PLAYER_SPEED
-                move_y = PLAYER_SPEED if dy > 0 else -PLAYER_SPEED
+                # 移動を継続
+                move_x = PLAYER_SPEED * (1 if dx > 0 else -1 if dx < 0 else 0)  # 目標位置が右にあれば正の速度、左にあれば負の速度、同じなら0
+                move_y = PLAYER_SPEED * (1 if dy > 0 else -1 if dy < 0 else 0)  # 目標位置が下にあれば正の速度、上にあれば負の速度、同じなら0
+                self.rect.centerx += move_x
+                self.rect.centery += move_y
                 
-                if dx != 0:
-                    self.rect.centerx += move_x
-                if dy != 0:
-                    self.rect.centery += move_y
-        
         # 角度を更新
         if self.angle != self.target_angle:
             angle_diff = self.target_angle - self.angle
@@ -216,7 +268,12 @@ class Player(pg.sprite.Sprite):
         return (self.rect.centerx // GRID_SIZE, self.rect.centery // GRID_SIZE)
     
     def is_tunnel_position(self, pos: tuple[int, int]) -> bool:
-        """指定された位置がワープトンネルかどうかを判定"""
+        """指定された位置がワープトンネルかどうかを判定
+        Args:
+            pos: グリッド座標(x, y)
+        Returns:
+            ワープトンネルであればTrue, そうでなければFalse
+        """
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
 
@@ -288,6 +345,7 @@ class Enemy(pg.sprite.Sprite):
         self.current_corner = self.enemy_id - 1
 
     def update(self) -> None:
+        """敵の位置を更新"""
         current_time = time.time()
         
         # スタート時の遅延チェック
@@ -339,7 +397,10 @@ class Enemy(pg.sprite.Sprite):
                 pass
 
     def get_target_position(self) -> tuple[int, int]:
-        """現在のモードに応じた目標位置を取得"""
+        """現在のモードに応じた目標位置を取得
+        Returns:
+            目標位置のグリッド座標(x, y)
+        """
         if self.mode == EnemyMode.WEAK:
             return self.get_random_position()
         
@@ -358,7 +419,13 @@ class Enemy(pg.sprite.Sprite):
             return player_pos if distance > 8 else self.get_random_position()
 
     def find_path(self, start: tuple[int, int], goal: tuple[int, int]) -> list:
-        """A*アルゴリズムによる経路探索"""
+        """A*アルゴリズムによる経路探索
+        Args:
+            start: 開始位置のグリッド座標(x, y)
+            goal: 目標位置のグリッド座標(x, y)
+        Returns:
+            経路のグリッド座標のリスト
+        """
         def heuristic(a: tuple[int, int], b: tuple[int, int]) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
         
@@ -447,11 +514,19 @@ class Enemy(pg.sprite.Sprite):
         self.moving = False
 
     def get_grid_pos(self) -> tuple[int, int]:
-        """現在のグリッド座標を取得"""
+        """現在のグリッド座標を取得
+        Returns:
+            現在のグリッド座標(x, y)
+        """
         return self.rect.centerx // GRID_SIZE, self.rect.centery // GRID_SIZE
 
     def get_neighbors(self, pos: tuple[int, int]) -> list[tuple[int, int]]:
-        """指定された位置の隣接する移動可能なグリッドを取得"""
+        """指定された位置の隣接する移動可能なグリッドを取得
+        Args:
+            pos: グリッド座標(x, y)
+        Returns:
+            隣接する移動可能なグリッド座標のリスト
+        """
         x, y = pos
         neighbors = []
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -463,11 +538,23 @@ class Enemy(pg.sprite.Sprite):
         return neighbors
 
     def calculate_distance(self, pos1: tuple[int, int], pos2: tuple[int, int]) -> int:
-        """2つのグリッド座標間のマンハッタン距離を計算"""
+        """2つのグリッド座標間のマンハッタン距離を計算
+        Args:
+            pos1: グリッド座標(x, y)
+            pos2: グリッド座標(x, y)
+        Returns:
+            マンハッタン距離
+        """
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
     def get_position_ahead(self, pos: tuple[int, int], distance: int) -> tuple[int, int]:
-        """プレイヤーの前方の位置を計算（壁を考慮）"""
+        """プレイヤーの前方の位置を計算（壁を考慮）
+        Args:
+            pos: プレイヤーのグリッド座標(x, y)
+            distance: 前方への距離
+        Returns:
+            計算されたグリッド座標(x, y)
+        """
         dx = pos[0] - self.get_grid_pos()[0]
         dy = pos[1] - self.get_grid_pos()[1]
         
@@ -491,6 +578,8 @@ class Enemy(pg.sprite.Sprite):
         """
         プレイヤーと別の敵を結ぶ線分の延長線上の位置を計算する。
         ただし、壁を考慮し、移動可能な範囲内で最も近い位置を返す。
+        Returns:
+            計算されたグリッド座標(x, y)
         """
         enemy1_pos = self.get_grid_pos()
         player_pos = self.player.get_grid_pos()
@@ -521,7 +610,10 @@ class Enemy(pg.sprite.Sprite):
         return best_pos
 
     def get_random_position(self) -> tuple[int, int]:
-        """ランダムな移動可能位置を取得（壁を考慮）"""
+        """ランダムな移動可能位置を取得（壁を考慮）
+        Returns:
+            ランダムな移動可能位置のグリッド座標(x, y)
+        """
         valid_positions = []
         for y in range(self.map_data.height):
             for x in range(self.map_data.width):
@@ -713,17 +805,7 @@ def main():
 
         # プレイヤーの更新と描画
         keys = pg.key.get_pressed()
-        if not player.moving:
-            current_x, current_y = player.get_grid_pos()
-            if keys[pg.K_LEFT]:
-                player.move_to_grid((current_x - 1, current_y))
-            elif keys[pg.K_RIGHT]:
-                player.move_to_grid((current_x + 1, current_y))
-            elif keys[pg.K_UP]:
-                player.move_to_grid((current_x, current_y - 1))
-            elif keys[pg.K_DOWN]:
-                player.move_to_grid((current_x, current_y + 1))
-        
+        player.handle_input(keys)
         player.update()
         player.draw(screen)
 
