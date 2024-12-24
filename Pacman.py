@@ -447,20 +447,34 @@ class Enemy(pg.sprite.Sprite):
         self.enemy_id = enemy_id
         self.player = player
         self.map_data = map_data
+
+        image_idex = [0, 4, 5, 7]
         
         # 画像の読み込みとスケーリング
-        self.normal_image = pg.transform.scale(
-            pg.image.load(f"fig/{enemy_id}.png").convert_alpha(), 
+        self.normal_image_base = pg.transform.scale(
+            pg.image.load(f"fig/{image_idex[enemy_id-1]}.png").convert_alpha(), 
             (ENEMY_SIZE, ENEMY_SIZE)
         )
-        self.weak_image = pg.transform.scale(
-            pg.image.load("fig/chicken.png").convert_alpha(), 
-            (ENEMY_SIZE, ENEMY_SIZE)
-        )
+        self.normal_image_lst = {
+            (-1, 0): self.normal_image_base,  # 左向き
+            (1, 0): pg.transform.flip(self.normal_image_base, True, False),  #右向き
+            (0, -1): self.normal_image_base,  # 上向き
+            # (0, -1): pg.transform.rotozoom(self.normal_image_base, -90, 1),  # 上向き
+            (0, 1): pg.transform.rotozoom(self.normal_image_base, 90, 1)}  # 下向き
+        self.normal_image = self.normal_image_lst[(1, 0)]
+
+        self.weak_images = [
+            pg.transform.scale(pg.image.load("fig/chicken.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            pg.transform.scale(pg.image.load("fig/food_christmas_chicken.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            pg.transform.scale(pg.image.load("fig/chicken_honetsuki.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
+            ]
+        self.current_weak_image = None  # 現在選択中のweak画像
+
         self.eaten_image = pg.transform.scale(
             pg.image.load("fig/pet_hone.png").convert_alpha(), 
             (ENEMY_SIZE, ENEMY_SIZE)
         )
+        
         self.image = self.normal_image
         self.rect = self.image.get_rect()
         
@@ -638,13 +652,31 @@ class Enemy(pg.sprite.Sprite):
             # 目標地点まで移動
             direction.scale_to_length(self.speed)
             self.rect.center = tuple(current + direction)
+        
+        # 移動方向に応じて画像を更新
+        if not self.is_eaten and self.mode != EnemyMode.WEAK:
+            dx = 1 if direction.x > 0 else -1 if direction.x < 0 else 0
+            dy = 1 if direction.y > 0 else -1 if direction.y < 0 else 0
+            
+            # x方向の移動が y方向より大きい場合
+            if abs(direction.x) > abs(direction.y):
+                direction_key = (dx, 0)
+            else:
+                direction_key = (0, dy)
+                
+            if direction_key in self.normal_image_lst:
+                self.normal_image = self.normal_image_lst[direction_key]
+                self.image = self.normal_image
 
     def make_weak(self) -> None:
         """弱体化モードに移行"""
         if not self.is_eaten:
             self.mode = EnemyMode.WEAK
             self.weak_start_time = time.time()
-            self.image = self.weak_image
+            # まだweak画像が選択されていない場合のみ、ランダムに選択
+            if self.current_weak_image is None:
+                self.current_weak_image = random.choice(self.weak_images)
+            self.image = self.current_weak_image
             self.speed = self.default_speed * 0.8  # 速度を20%減少
 
     def get_eaten(self) -> None:
@@ -664,6 +696,7 @@ class Enemy(pg.sprite.Sprite):
         self.mode_timer = time.time()
         self.current_path = []
         self.moving = False
+        self.current_weak_image = None  # weak画像の選択をリセット
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
