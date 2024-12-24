@@ -40,18 +40,22 @@
 ### アイテムの設定 担当：𠮷岡
 ### class Item
 #### 概要
-Itemクラスは、ゲーム内に配置されるコインを表示するためにクラス 。このクラスはpygame.sprite.Spriteクラスを継承しており、PygameのSprite機能を活用して、アイテムの当たり判定を効率的に行えるようにしている
+Itemクラスは、ゲーム内に配置されるエサを表示するためにクラス 。このクラスはpygame.sprite.Spriteクラスを継承しており、PygameのSprite機能を活用して、アイテムの当たり判定を効率的に行えるようにしている
 
 #### 属性
-* radius (int) : コインの半径を表す
 * image (pygame.Surface) : コインの描画を使用されるSurfaceオブジェクトが描画される
-* rect (pygame.Rect) : コインの位置とサイズを保持するオブジェクト
+* grid_pos (tuple) : グリッド座標のタプル
+* item_type (ini) : アイテムの種類 (1: 通常エサ, 2: パワーエサ)
 
 #### メソッド
 - __init__ (self, x: int, y: int) :
     - Itemクラスのコンストラクタ
     - 引数としてコインが配置されるマップ上の座標を受け取る
     - コンストラクタ内で、コインの半径、描画する円、位置が設定される
+
+- update (self, player:'Player') :
+    - アイテムを更新する
+    - プレーヤーと衝突したらkill
 
 ### スコアの表示　担当：𠮷岡
 ### class Score

@@ -1,4 +1,5 @@
-import math
+from enum import Enum, auto
+import heapq
 import os
 import random
 import sys
@@ -8,71 +9,146 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
-PLAYER_SPEED = 2
+GRID_SIZE = 20
+PLAYER_SPEED = 3
+PLAYER_SIZE = 20
+ENEMY_SIZE = 30
+
+# 色の定義
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-GS = 32
+
+
+def get_grid_pos(pixel_x: int, pixel_y: int) -> tuple[int, int]:
+    """現在のグリッド座標を返す
+    Args:
+        pixel_x: ピクセルX座標
+        pixel_y: ピクセルY座標
+    Returns:
+        現在のグリッド座標(x, y)
+    """
+    return pixel_x // GRID_SIZE, pixel_y // GRID_SIZE
+
+
+def get_pixel_pos(grid_x: int, grid_y: int) -> tuple[int, int]:
+    """グリッド座標からピクセル座標を計算して返す
+    Args:
+        grid_x: グリッドX座標
+        grid_y: グリッドY座標
+    Returns:
+        ピクセル座標(x, y)
+    """
+    pixel_x = grid_x * GRID_SIZE + GRID_SIZE // 2
+    pixel_y = grid_y * GRID_SIZE + GRID_SIZE // 2
+    return pixel_x, pixel_y
 
 
 class Map:
-    def __init__(self):
+    """マップの管理を行うクラス"""
+    def __init__(self, map_file: str) -> None:
+        """マップの初期化
+        Args:
+            map_file: マップデータファイルのパス
+        Note:
+            ファイルフォーマット:
+            0: 通路
+            1: 壁
+            2: 通常エサ
+            3: パワーエサ
+            4: 敵のおうち
+            5: ワープトンネル
         """
-        マップの初期化
+        self.dots_remaining = 0  # 残りドット数
+        self.dots_eaten = 0      # 食べたドット数
+        
+        
+        # マップデータの読み込み
+        self.map_data = []
+        with open(map_file, 'r') as f:
+            for line in f:
+                row = [int(cell) for cell in line.strip().split()]
+                self.map_data.append(row)
+        self.height = len(self.map_data)
+        self.width = len(self.map_data[0])
+        
+        # パワーエサとワープトンネルの位置を特定
+        power_pellets = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 3:
+                    power_pellets.append({'x': x, 'y': y})
+        self.power_pellets = power_pellets
+        
+        tunnels = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 5:
+                    tunnels.append({'x': x, 'y': y})
+        self.tunnels = tunnels
+        
+        """プレイフィールドの作成
+        playfield: マップの各マスに対応する辞書の2次元配列
+        各辞書のキー:
+            'path': bool, そのマスが通路であるか
+            'dot': int, そのマスにあるドットの種類 (0: なし, 1: 通常ドット, 2: パワードット)
+            'intersection': bool, そのマスが交差点であるか
+            'tunnel': bool, そのマスがワープトンネルであるか
         """
-        self.map = [
-            [1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1],
-            [1, 0, 0, 0, 0, 1, 0, 0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 0, 1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 0, 1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 1, 0, 1, 0, 0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,1 ,0 ,0 ,1],
-            [1, 1, 0, 0, 0, 1, 1, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,0 ,0 ,1 ,1],
-            [1, 0, 0, 1, 0, 0, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,1],
-            [1, 0, 1, 1, 0, 1, 1, 1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 0 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 1, 0, 1, 1, 1, 0, 1 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 0, 1, 1, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,1 ,1 ,0 ,1 ,0 ,1],
-            [1, 0, 0, 0, 1, 1, 0, 1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,0 ,1],
-            [1, 1, 1, 0, 0, 0, 0, 1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,1 ,1 ,1],
-            [1, 0, 0, 0, 1, 1, 0, 1 ,0 ,1 ,0 ,1 ,1 ,1 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,0 ,0 ,1],
-            [1, 0, 1, 0, 0, 0, 0, 0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,1],
-            [1, 0, 1, 0, 1, 1, 0, 1 ,0 ,1 ,1 ,1 ,0 ,1 ,1 ,0 ,1 ,1 ,1 ,0 ,1 ,0 ,1 ,1 ,0 ,1 ,0 ,1],
-            [1, 0, 0, 0, 0, 0, 0, 1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
-            [1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1],
-        ]
-        self.ROW,self.COL = len(self.map),len(self.map[0])
+        playfield = []
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                cell = {
+                    'path': self.map_data[y][x] in [0, 2, 3, 4, 5],
+                    'dot': 1 if self.map_data[y][x] == 2 else 2 if self.map_data[y][x] == 3 else 0,
+                    'intersection': False,
+                    'tunnel': self.map_data[y][x] == 5
+                }
+                if cell['dot'] > 0:
+                    self.dots_remaining += 1
+                row.append(cell)
+            playfield.append(row)
+        
+        # 交差点の判定
+        for y in range(1, self.height - 1):
+            for x in range(1, self.width - 1):
+                if playfield[y][x]['path']:
+                    paths = 0
+                    if playfield[y-1][x]['path']: paths += 1
+                    if playfield[y+1][x]['path']: paths += 1
+                    if playfield[y][x-1]['path']: paths += 1
+                    if playfield[y][x+1]['path']: paths += 1
+                    playfield[y][x]['intersection'] = paths > 2
+        self.playfield = playfield
 
-    def draw_map(self, screen):
+        # 敵の初期位置を特定
+        self.enemy_start_positions = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.map_data[y][x] == 4:
+                    self.enemy_start_positions.append((x, y))
+    
+    def draw(self, screen: pg.Surface, field_start: tuple[int, int]) -> None:
+        """マップを描画する
+        Args:
+            screen: 描画対象の画面
+            field_start: フィールドの開始座標(x, y)
         """
-        マップを描画する
-        """
-        for r in range(self.ROW):
-            for c in range(self.COL):
-                if self.map[r][c] == 0: # 道（緑の四角）
-                    pg.draw.rect(screen, (0, 255, 0), (c*GS, r*GS, GS, GS))
-                elif self.map[r][c] == 1:  # 壁（青の四角）
-                    pg.draw.rect(screen, (0, 0, 255), (c*GS, r*GS, GS, GS))
-
-    def is_movable(self, rect):
-        """
-        rect が移動可能か？
-        """
-        # rect の各辺の座標をタイル座標に変換
-        left_tile = rect.left // GS
-        right_tile = rect.right // GS
-        top_tile = rect.top // GS
-        bottom_tile = rect.bottom // GS
-
-        # マップ範囲外に出ていないかチェック
-        if left_tile < 0 or right_tile >= self.COL or top_tile < 0 or bottom_tile >= self.ROW:
-          return False
-
-        # 各タイルが移動可能かチェック
-        for x in range(left_tile, right_tile + 1):
-           for y in range(top_tile, bottom_tile + 1):
-            if self.map[y][x] == 1: #壁があったら
-                return False
-        return True
+        colors = {
+            0: (0, 0, 0),      # 通路: 黒
+            1: (54, 67, 100),  # 壁: 青
+            4: (255, 192, 203) # ゴーストの家の入り口: ピンク
+        }
+        
+        for y, row in enumerate(self.map_data):
+            for x, cell in enumerate(row):
+                rect_x = field_start[0] + (x * GRID_SIZE)
+                rect_y = field_start[1] + (y * GRID_SIZE)
+                
+                if cell in colors:
+                    pg.draw.rect(screen, colors[cell], (rect_x, rect_y, GRID_SIZE, GRID_SIZE))
 
 
 class Player(pg.sprite.Sprite):
@@ -551,22 +627,40 @@ class Enemy(pg.sprite.Sprite):
     
 
 class Item(pg.sprite.Sprite):
-    """
-    アイテムに関するクラス
-    """
-    def __init__(self, x: int , y:int):
-        """
-        コインを生成する
-        x, y : mapの通路の部分
+    """アイテム（エサ）の管理クラス"""
+    def __init__(self, grid_pos: tuple[int, int], item_type: int) -> None:
+        """アイテムの初期化
+        Args:
+            grid_pos: グリッド座標(x, y)
+            item_type: アイテムの種類 (1: 通常エサ, 2: パワーエサ)
         """
         super().__init__()
-        self.radius = GS // 6 
-        self.image = pg.Surface((self.radius * 2, self.radius * 2))
-        pg.draw.circle(self.image, (255, 255, 0), (self.radius, self.radius), self.radius)  # 半径radiusの円を描く
-        self.image.set_colorkey((0, 0, 0))
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x * GS + GS // 2 - self.radius, y * GS + GS // 2 - self.radius)  # rectの左上の座標
+        self.image = pg.Surface((GRID_SIZE, GRID_SIZE), pg.SRCALPHA)
+        self.grid_pos = grid_pos
+        self.item_type = item_type
         
+        center_x = GRID_SIZE // 2
+        center_y = GRID_SIZE // 2
+
+        if self.item_type == 1: # 通常エサ
+            self.color = (255, 105, 180) # ピンク
+            self.radius = 3
+            pg.draw.circle(self.image, self.color, (center_x, center_y), self.radius)
+
+        elif self.item_type == 2: # パワーエサ
+            self.color = (255, 105, 180) # ピンク
+            self.radius = 6
+            pg.draw.circle(self.image, self.color, (center_x, center_y), self.radius)
+        
+        self.rect = self.image.get_rect(center=get_pixel_pos(*grid_pos))
+    
+    def update(self, player: 'Player'):
+        """
+        アイテムを更新する
+        プレイヤーと衝突したらkillする
+        """
+        if pg.sprite.collide_rect(self, player):
+            self.kill()
 
 class Score:
     """
@@ -681,69 +775,67 @@ def draw_start_screen(screen):
 
 def main():
     pg.display.set_caption("Pacman")
-    screen = pg.display.set_mode((WIDTH, HEIGHT))   
-    start=True
-    d_map = Map()
-    # d_map.draw_map(screen)
-    player = Player(d_map)
+    screen = pg.display.set_mode((WIDTH, HEIGHT))
+    map_data = Map("map2.txt")
+    player = Player((1, 1), map_data)  
 
-    coins = pg.sprite.Group()
-    score = Score()
-    
-    #コインの生成
-    for y in range(len(d_map.map)):
-        for x in range(len(d_map.map[0])):
-            if d_map.map[y][x] == 0:
-                coin = Item(x, y)
-                coins.add(coin)
+    # エサんｐグループを作成
+    baits = pg.sprite.Group()
+    for x in range(map_data.height):
+        for y in range(map_data.width):
+            if map_data.playfield[x][y]["dot"] in [1, 2]:
+                baits.add(Item((y, x), map_data.playfield[x][y]["dot"]))
+
+    # 敵のグループを作成
+    enemies = pg.sprite.Group()
+    for i in range(4):
+        enemies.add(Enemy(i+1, player, map_data))
+
+    # デバッグ情報表示クラスのインスタンスを作成
+    debug_info = DebugInfo(player, enemies, baits)
 
     tmr = 0
     clock = pg.time.Clock()
 
     while True:
-        if start:
-            draw_start_screen(screen)  # スタート画面を描画
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
-                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # スペースキーで開始
-                    start = False
-                    
-        else:
-            # ゲーム中の処理を書く
-            screen.fill((0, 0, 0))  # 背景を黒に設定
-            d_map.draw_map(screen)
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                return 0
 
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
+        screen.fill((0, 0, 0))
+        # マップの描画
+        # map_data.draw(screen, (WIDTH//2 - map_data.width*GRID_SIZE//2, HEIGHT//2 - map_data.height*GRID_SIZE//2))
+        map_data.draw(screen, (0, 0))
 
-            key_lst = pg.key.get_pressed()
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
+        # エサの描画と更新
+        baits.draw(screen)
+        baits.update(player)
 
-            # キー入力を取得して移動処理
-            keys = pg.key.get_pressed()
-            player.move(keys)
+        # プレイヤーの更新と描画
+        keys = pg.key.get_pressed()
+        player.handle_input(keys)
+        player.update()
+        player.draw(screen)
 
-            # プレイヤー（黄色の円）を描画
-            player.draw(screen)
+        # 敵の更新と描画
+        enemies.update()
+        enemies.draw(screen)
 
-            # playerとコインの値判定
-            hit_coins = pg.sprite.spritecollide(player, coins, False)
-            for coin in hit_coins:
-                coins.remove(coin)
-                score.value += 50
-            coins.draw(screen)
+        # デバッグ情報の更新と描画
+        debug_info.update()
+        debug_info.draw(screen)
 
-            score.update(screen)
+        # パワーエサの処理
+        for bait in baits:
+            if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
+                for enemy in enemies:
+                    enemy.make_weak()
+                bait.kill()
+
         pg.display.update()
         tmr += 1
         clock.tick(50)
+
 
 if __name__ == "__main__":
     pg.init()
