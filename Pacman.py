@@ -140,7 +140,8 @@ class Map:
         colors = {
             0: (0, 0, 0),      # 通路: 黒
             1: (54, 67, 100),  # 壁: 青
-            4: (255, 192, 203) # ゴーストの家の入り口: ピンク
+            4: (255, 192, 203), # ゴーストの家の入り口: ピンク
+            5: (0, 255, 0)     # ワープトンネル: 緑
         }
         
         for y, row in enumerate(self.map_data):
@@ -886,7 +887,7 @@ def draw_start_screen(screen):
 def main():
     pg.display.set_caption("Pacman")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
-    map_data = Map("map2.txt")
+    map_data = Map("map1.txt")
     player = Player((1, 1), map_data)
     score = Score()
     start = True  
