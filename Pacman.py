@@ -878,6 +878,28 @@ def draw_start_screen(screen):
     copyright_text = font_copyright.render("(c) 2024 Group15", True, (255, 255, 255))
     screen.blit(copyright_text, (WIDTH - copyright_text.get_width() - 10, HEIGHT - copyright_text.get_height() - 10))
 
+def draw_game_over(screen):
+    """
+    ゲームオーバー画面を描画する関数
+    """
+    font=pg.font.Font(None,74)
+    game_text=font.render("GAME",True,WHITE)
+    over_text=font.render("OVER",True,WHITE)
+
+    screen_center_x=WIDTH//2
+    screen_center_y=HEIGHT//2
+
+    game_rect = game_text.get_rect(centerx=screen_center_x, centery=screen_center_y - 50)
+    over_rect = over_text.get_rect(centerx=screen_center_x, centery=screen_center_y + 50)
+    
+    screen.blit(game_text, game_rect)
+    screen.blit(over_text, over_rect)
+    
+    # パックマンの画像を"GAME"と"OVER"の間に描画
+    pacman_image = pg.transform.scale(pg.image.load("fig/pac-man1.png").convert_alpha(), (50, 50))
+    pacman_rect = pacman_image.get_rect(center=(screen_center_x, screen_center_y))
+    screen.blit(pacman_image, pacman_rect)
+    
 
 def main():
     pg.display.set_caption("Pacman")
