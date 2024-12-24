@@ -8,7 +8,8 @@
 * pygameでPacmanを作る
 
 ## ゲームの遊び方
-* 
+* ゲーム画面
+    * ![alt text](game_image.png)
 
 ## ゲームの実装
 ### マップの描画 担当: 村山奏人

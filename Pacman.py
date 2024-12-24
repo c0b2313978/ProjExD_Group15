@@ -1039,9 +1039,9 @@ def main():
             enemies.update()
             enemies.draw(screen)
 
-            # デバッグ情報の更新と描画
-            debug_info.update()
-            debug_info.draw(screen)
+            # # デバッグ情報の更新と描画
+            # debug_info.update()
+            # debug_info.draw(screen)
 
             # スコアの描画
             score.draw(screen)
