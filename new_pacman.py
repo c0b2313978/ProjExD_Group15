@@ -277,11 +277,13 @@ class Player(pg.sprite.Sprite):
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
 
+
 class EnemyMode(Enum):
     """敵の行動モードを定義する列挙型"""
     CHASE = auto()      # 追跡モード
     TERRITORY = auto()  # 縄張りモード
     WEAK = auto()       # 弱体化モード
+
 
 class Enemy(pg.sprite.Sprite):
     def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map') -> None:
@@ -323,26 +325,26 @@ class Enemy(pg.sprite.Sprite):
         self.moving = False
         
         # スタート時の遅延設定
-        self.start_delay = enemy_id * 1  # 1秒ごとに順番にスタート
+        self.start_delay = enemy_id * 1  # 敵ごとのスタート遅延
         self.game_start_time = time.time()
         self.can_move = False
         
         # モード関連の初期化
-        self.mode = EnemyMode.TERRITORY
-        self.mode_timer = time.time()
-        self.chase_duration = 10
-        self.territory_duration = 8
-        self.weak_duration = 10
-        self.weak_start_time = 0
-        self.is_eaten = False  # 食べられた状態を追加
+        self.mode = EnemyMode.CHASE  # 初期モードは追跡
+        self.mode_timer = time.time()  # モードタイマー
+        self.chase_duration = 15  # 追跡モードの長さ
+        self.territory_duration = 4  # 縄張りモードの長さ
+        self.weak_duration = 10  # 弱体化モードの長さ
+        self.weak_start_time = 0  # 弱体化開始時間
+        self.is_eaten = False  # 食べられた状態
         
-        self.territory_corners = [
+        self.territory_corners = [ # 縄張りモードの角
             (1, 1), 
             (1, map_data.height-2),
             (map_data.width-2, 1),
             (map_data.width-2, map_data.height-2)
         ]
-        self.current_corner = self.enemy_id - 1
+        self.current_corner = self.enemy_id - 1 # 現在の縄張りの角
 
     def update(self) -> None:
         """敵の位置を更新"""
@@ -716,7 +718,7 @@ class Map:
         """
         colors = {
             0: (0, 0, 0),      # 通路: 黒
-            1: (33, 33, 255),  # 壁: 青
+            1: (54, 67, 100),  # 壁: 青
             4: (255, 192, 203) # ゴーストの家の入り口: ピンク
         }
         
@@ -727,7 +729,6 @@ class Map:
                 
                 if cell in colors:
                     pg.draw.rect(screen, colors[cell], (rect_x, rect_y, GRID_SIZE, GRID_SIZE))
-
 
 
 class Item(pg.sprite.Sprite):
@@ -767,6 +768,57 @@ class Item(pg.sprite.Sprite):
             self.kill()
 
 
+class DebugInfo:
+    """デバッグ情報を表示するクラス"""
+    def __init__(self, player: 'Player', enemies: pg.sprite.Group, baits: pg.sprite.Group) -> None:
+        """初期化
+        Args:
+            player: プレイヤーオブジェクト
+            enemies: 敵のスプライトグループ
+            baits: エサのスプライトグループ
+        """
+        self.player = player
+        self.enemies = enemies
+        self.baits = baits
+        self.font = pg.font.Font(None, 30)
+        self.item_count = len(baits)
+        self.items_eaten = 0
+        self.enemy_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]  # 敵ごとの色
+
+    def update(self):
+        """デバッグ情報の更新"""
+        self.items_eaten = self.item_count - len(self.baits)
+
+    def draw(self, screen: pg.Surface):
+        """デバッグ情報の描画
+        Args:
+            screen: 描画先のスクリーン
+        """
+        # プレイヤー情報の表示
+        player_pos_text = self.font.render(f"Player Pos: {self.player.get_grid_pos()}", True, WHITE)
+        screen.blit(player_pos_text, (WIDTH - 300, 20))
+        player_moving_text = self.font.render(f"Moving: {self.player.moving}", True, WHITE)
+        screen.blit(player_moving_text, (WIDTH - 300, 50))
+        player_direction_text = self.font.render(f"Direction: {self.player.current_direction}", True, WHITE)
+        screen.blit(player_direction_text, (WIDTH - 300, 80))
+
+        # 敵の情報の表示と経路の描画
+        for i, enemy in enumerate(self.enemies):
+            enemy_info_text = self.font.render(f"Enemy {enemy.enemy_id}: {enemy.mode.name}", True, WHITE)
+            screen.blit(enemy_info_text, (WIDTH - 300, 120 + i * 80))
+            target_pos = enemy.get_target_position()
+            target_rect = pg.Rect(get_pixel_pos(*target_pos), (10, 10))
+            pg.draw.rect(screen, self.enemy_colors[i], target_rect)
+            if enemy.current_path and len(enemy.current_path) >= 2:
+                points = [get_pixel_pos(*pos) for pos in enemy.current_path]
+                pg.draw.lines(screen, self.enemy_colors[i], False, points, 3)
+
+        # アイテム情報の表示
+        item_count_text = self.font.render(f"Total Items: {self.item_count}", True, WHITE)
+        screen.blit(item_count_text, (WIDTH - 300, 450))
+        items_eaten_text = self.font.render(f"Items Eaten: {self.items_eaten}", True, WHITE)
+        screen.blit(items_eaten_text, (WIDTH - 300, 480))
+
 
 def main():
     pg.display.set_caption("Pacman")
@@ -785,6 +837,9 @@ def main():
     enemies = pg.sprite.Group()
     for i in range(4):
         enemies.add(Enemy(i+1, player, map_data))
+
+    # デバッグ情報表示クラスのインスタンスを作成
+    debug_info = DebugInfo(player, enemies, baits)
 
     tmr = 0
     clock = pg.time.Clock()
@@ -813,6 +868,10 @@ def main():
         enemies.update()
         enemies.draw(screen)
 
+        # デバッグ情報の更新と描画
+        debug_info.update()
+        debug_info.draw(screen)
+
         # パワーエサの処理
         for bait in baits:
             if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
@@ -820,13 +879,9 @@ def main():
                     enemy.make_weak()
                 bait.kill()
 
-
-
         pg.display.update()
         tmr += 1
         clock.tick(50)
-
-
 
 
 if __name__ == "__main__":
