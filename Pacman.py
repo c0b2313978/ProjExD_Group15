@@ -154,14 +154,12 @@ class Map:
 
 
 class Player(pg.sprite.Sprite):
-    def __init__(self, grid_pos: tuple[int, int], map_data: 'Map') -> None:
-        """プレイヤーの初期化
-        Args:
-            grid_pos: グリッド座標(x, y)
-            map_data: マップデータ
-        """
+    def __init__(self, grid_pos: tuple[int, int], map_data: Map):
         super().__init__()
+        self.grid_pos = grid_pos
         self.map_data = map_data
+        self.lives = 3  # 残機の初期値
+        self.font = pg.font.Font(None, 30)
 
         # 画像関連の初期化
         self.original_images = [
@@ -192,6 +190,19 @@ class Player(pg.sprite.Sprite):
         self.can_warp = True  # ワープ可能かどうかのフラグ
         self.last_warp_pos = None  # 最後にワープした位置
         self.warp_cells = [tuple(cell.values()) for cell in map_data.tunnels]
+
+    def reset_position(self): 
+        """
+        プレイヤーの位置を初期位置に戻す
+        """
+        self.rect.center = get_pixel_pos(*self.grid_pos)  # 初期位置に設定
+        self.current_direction = None  # 移動方向をリセット
+        self.moving = False
+        
+        
+
+        
+
     
     def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
         """キー入力を処理
@@ -366,7 +377,12 @@ class Player(pg.sprite.Sprite):
         Args:
             screen: 描画先のスクリーン
         """
+        # プレイヤーの画像を描画
         screen.blit(self.image, self.rect)
+
+    # 残機数を描画
+        lives_text = self.font.render(f"Life: {self.lives}", True, (255, 255, 255))  # 白色のテキスト
+        screen.blit(lives_text, (20, 0))  # 左上の座標(20, 20)に描画
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
@@ -384,6 +400,32 @@ class Player(pg.sprite.Sprite):
         """
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
+    
+    # def game_over(screen: pg.Surface):
+    #     """
+    #     ゲームオーバー画面を表示
+    #     """
+    #     font = pg.font.Font(None, 60)
+    #     game_over_text = font.render("GAME OVER", True, (255, 0, 0))
+    #     retry_text = font.render("Press R to Retry or Q to Quit", True, WHITE)
+
+    #     screen.fill((0, 0, 0))
+    #     screen.blit(game_over_text, (WIDTH // 2 - 150, HEIGHT // 2 - 50))
+    #     screen.blit(retry_text, (WIDTH // 2 - 200, HEIGHT // 2 + 20))
+    #     pg.display.update()
+
+    #     while True:
+    #         for event in pg.event.get():
+    #             if event.type == pg.QUIT:
+    #                 pg.quit()
+    #                 sys.exit()
+    #             if event.type == pg.KEYDOWN:
+    #                 if event.key == pg.K_r:
+    #                     main()  # ゲームを再スタート
+    #                 if event.key == pg.K_q:
+    #                     pg.quit()
+    #                     sys.exit()
+
 
 
 class EnemyMode(Enum):
@@ -503,8 +545,8 @@ class Enemy(pg.sprite.Sprite):
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
-                # TODO: プレイヤーへのダメージ処理をここに実装
-                pass
+                self.player.reset_position()  # プレイヤーへのダメージ処理をここに実装
+                self.player.lives -= 1
 
     def get_target_position(self) -> tuple[int, int]:
         """現在のモードに応じた目標位置を取得
