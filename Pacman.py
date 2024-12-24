@@ -1,4 +1,5 @@
-import math
+from enum import Enum, auto
+import heapq
 import os
 import random
 import sys
@@ -8,9 +9,40 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 640  # ゲームウィンドウの高さ
-PLAYER_SPEED = 2
+GRID_SIZE = 20
+PLAYER_SPEED = 3
+PLAYER_SIZE = 20
+ENEMY_SIZE = 30
+
+# 色の定義
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-GS = 32
+
+
+def get_grid_pos(pixel_x: int, pixel_y: int) -> tuple[int, int]:
+    """現在のグリッド座標を返す
+    Args:
+        pixel_x: ピクセルX座標
+        pixel_y: ピクセルY座標
+    Returns:
+        現在のグリッド座標(x, y)
+    """
+    return pixel_x // GRID_SIZE, pixel_y // GRID_SIZE
+
+
+def get_pixel_pos(grid_x: int, grid_y: int) -> tuple[int, int]:
+    """グリッド座標からピクセル座標を計算して返す
+    Args:
+        grid_x: グリッドX座標
+        grid_y: グリッドY座標
+    Returns:
+        ピクセル座標(x, y)
+    """
+    pixel_x = grid_x * GRID_SIZE + GRID_SIZE // 2
+    pixel_y = grid_y * GRID_SIZE + GRID_SIZE // 2
+    return pixel_x, pixel_y
 
 
 class Map:
@@ -286,22 +318,40 @@ class Enemy(pg.sprite.Sprite):
     
 
 class Item(pg.sprite.Sprite):
-    """
-    アイテムに関するクラス
-    """
-    def __init__(self, x: int , y:int):
-        """
-        コインを生成する
-        x, y : mapの通路の部分
+    """アイテム（エサ）の管理クラス"""
+    def __init__(self, grid_pos: tuple[int, int], item_type: int) -> None:
+        """アイテムの初期化
+        Args:
+            grid_pos: グリッド座標(x, y)
+            item_type: アイテムの種類 (1: 通常エサ, 2: パワーエサ)
         """
         super().__init__()
-        self.radius = GS // 6 
-        self.image = pg.Surface((self.radius * 2, self.radius * 2))
-        pg.draw.circle(self.image, (255, 255, 0), (self.radius, self.radius), self.radius)  # 半径radiusの円を描く
-        self.image.set_colorkey((0, 0, 0))
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x * GS + GS // 2 - self.radius, y * GS + GS // 2 - self.radius)  # rectの左上の座標
+        self.image = pg.Surface((GRID_SIZE, GRID_SIZE), pg.SRCALPHA)
+        self.grid_pos = grid_pos
+        self.item_type = item_type
         
+        center_x = GRID_SIZE // 2
+        center_y = GRID_SIZE // 2
+
+        if self.item_type == 1: # 通常エサ
+            self.color = (255, 105, 180) # ピンク
+            self.radius = 3
+            pg.draw.circle(self.image, self.color, (center_x, center_y), self.radius)
+
+        elif self.item_type == 2: # パワーエサ
+            self.color = (255, 105, 180) # ピンク
+            self.radius = 6
+            pg.draw.circle(self.image, self.color, (center_x, center_y), self.radius)
+        
+        self.rect = self.image.get_rect(center=get_pixel_pos(*grid_pos))
+    
+    def update(self, player: 'Player'):
+        """
+        アイテムを更新する
+        プレイヤーと衝突したらkillする
+        """
+        if pg.sprite.collide_rect(self, player):
+            self.kill()
 
 class Score:
     """
@@ -364,69 +414,67 @@ def draw_start_screen(screen):
 
 def main():
     pg.display.set_caption("Pacman")
-    screen = pg.display.set_mode((WIDTH, HEIGHT))   
-    start=True
-    d_map = Map()
-    # d_map.draw_map(screen)
-    player = Player(d_map)
+    screen = pg.display.set_mode((WIDTH, HEIGHT))
+    map_data = Map("map2.txt")
+    player = Player((1, 1), map_data)  
 
-    coins = pg.sprite.Group()
-    score = Score()
-    
-    #コインの生成
-    for y in range(len(d_map.map)):
-        for x in range(len(d_map.map[0])):
-            if d_map.map[y][x] == 0:
-                coin = Item(x, y)
-                coins.add(coin)
+    # エサんｐグループを作成
+    baits = pg.sprite.Group()
+    for x in range(map_data.height):
+        for y in range(map_data.width):
+            if map_data.playfield[x][y]["dot"] in [1, 2]:
+                baits.add(Item((y, x), map_data.playfield[x][y]["dot"]))
+
+    # 敵のグループを作成
+    enemies = pg.sprite.Group()
+    for i in range(4):
+        enemies.add(Enemy(i+1, player, map_data))
+
+    # デバッグ情報表示クラスのインスタンスを作成
+    debug_info = DebugInfo(player, enemies, baits)
 
     tmr = 0
     clock = pg.time.Clock()
 
     while True:
-        if start:
-            draw_start_screen(screen)  # スタート画面を描画
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
-                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # スペースキーで開始
-                    start = False
-                    
-        else:
-            # ゲーム中の処理を書く
-            screen.fill((0, 0, 0))  # 背景を黒に設定
-            d_map.draw_map(screen)
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                return 0
 
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
+        screen.fill((0, 0, 0))
+        # マップの描画
+        # map_data.draw(screen, (WIDTH//2 - map_data.width*GRID_SIZE//2, HEIGHT//2 - map_data.height*GRID_SIZE//2))
+        map_data.draw(screen, (0, 0))
 
-            key_lst = pg.key.get_pressed()
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    pg.quit()
-                    sys.exit()
+        # エサの描画と更新
+        baits.draw(screen)
+        baits.update(player)
 
-            # キー入力を取得して移動処理
-            keys = pg.key.get_pressed()
-            player.move(keys)
+        # プレイヤーの更新と描画
+        keys = pg.key.get_pressed()
+        player.handle_input(keys)
+        player.update()
+        player.draw(screen)
 
-            # プレイヤー（黄色の円）を描画
-            player.draw(screen)
+        # 敵の更新と描画
+        enemies.update()
+        enemies.draw(screen)
 
-            # playerとコインの値判定
-            hit_coins = pg.sprite.spritecollide(player, coins, False)
-            for coin in hit_coins:
-                coins.remove(coin)
-                score.value += 50
-            coins.draw(screen)
+        # デバッグ情報の更新と描画
+        debug_info.update()
+        debug_info.draw(screen)
 
-            score.update(screen)
+        # パワーエサの処理
+        for bait in baits:
+            if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
+                for enemy in enemies:
+                    enemy.make_weak()
+                bait.kill()
+
         pg.display.update()
         tmr += 1
         clock.tick(50)
+
 
 if __name__ == "__main__":
     pg.init()
