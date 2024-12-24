@@ -883,7 +883,8 @@ def main():
     pg.display.set_caption("Pacman")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     map_data = Map("map2.txt")
-    player = Player((1, 1), map_data)  
+    player = Player((1, 1), map_data)
+    start = True  
 
     # エサんｐグループを作成
     baits = pg.sprite.Group()
@@ -907,36 +908,44 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
+        if start:
+            draw_start_screen(screen)  # スタート画面を描画
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
+                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # スペースキーで開始
+                    start = False
+                    
+        else:
+            screen.fill((0, 0, 0))
+            # マップの描画
+            # map_data.draw(screen, (WIDTH//2 - map_data.width*GRID_SIZE//2, HEIGHT//2 - map_data.height*GRID_SIZE//2))
+            map_data.draw(screen, (0, 0))
 
-        screen.fill((0, 0, 0))
-        # マップの描画
-        # map_data.draw(screen, (WIDTH//2 - map_data.width*GRID_SIZE//2, HEIGHT//2 - map_data.height*GRID_SIZE//2))
-        map_data.draw(screen, (0, 0))
+            # エサの描画と更新
+            baits.draw(screen)
+            baits.update(player)
 
-        # エサの描画と更新
-        baits.draw(screen)
-        baits.update(player)
+            # プレイヤーの更新と描画
+            keys = pg.key.get_pressed()
+            player.handle_input(keys)
+            player.update()
+            player.draw(screen)
 
-        # プレイヤーの更新と描画
-        keys = pg.key.get_pressed()
-        player.handle_input(keys)
-        player.update()
-        player.draw(screen)
+            # 敵の更新と描画
+            enemies.update()
+            enemies.draw(screen)
 
-        # 敵の更新と描画
-        enemies.update()
-        enemies.draw(screen)
+            # デバッグ情報の更新と描画
+            debug_info.update()
+            debug_info.draw(screen)
 
-        # デバッグ情報の更新と描画
-        debug_info.update()
-        debug_info.draw(screen)
-
-        # パワーエサの処理
-        for bait in baits:
-            if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
-                for enemy in enemies:
-                    enemy.make_weak()
-                bait.kill()
+            # パワーエサの処理
+            for bait in baits:
+                if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
+                    for enemy in enemies:
+                        enemy.make_weak()
 
         pg.display.update()
         tmr += 1
