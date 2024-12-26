@@ -461,7 +461,8 @@ class Enemy(pg.sprite.Sprite):
             (0, -1): self.normal_image_base,  # 上向き
             # (0, -1): pg.transform.rotozoom(self.normal_image_base, -90, 1),  # 上向き
             (0, 1): pg.transform.rotozoom(self.normal_image_base, 90, 1)}  # 下向き
-        self.normal_image = self.normal_image_lst[(1, 0)]
+        self.initial_direction = (1, 0)  # 初期方向
+        self.normal_image = self.normal_image_lst[self.initial_direction]
 
         self.weak_images = [
             pg.transform.scale(pg.image.load("fig/chicken.png").convert_alpha(), (ENEMY_SIZE, ENEMY_SIZE)),
@@ -487,6 +488,7 @@ class Enemy(pg.sprite.Sprite):
         self.speed = self.default_speed
         self.current_path = []
         self.moving = False
+        self.direction = self.initial_direction  # 現在の移動方向を初期化
         
         # スタート時の遅延設定
         self.start_delay = enemy_id * 1  # 敵ごとのスタート遅延
@@ -514,50 +516,62 @@ class Enemy(pg.sprite.Sprite):
         """敵の位置を更新"""
         current_time = time.time()
         
-        # スタート時の遅延チェック
+        # スタート時の遅延チェック: ゲーム開始からの経過時間が、設定された遅延時間を超えているかを確認
         if not self.can_move:
             if current_time - self.game_start_time >= self.start_delay:
+                # 遅延時間が経過していれば、移動可能フラグをTrueにする
                 self.can_move = True
             else:
                 return
         
-        # 食べられた状態の処理
+        # 敵が食べられた状態の場合の処理
         if self.is_eaten:
+            # 移動中でない場合、スタート位置への経路を探索
             if not self.moving:
                 self.current_path = self.find_path(self.get_grid_pos(), self.start_pos)
+                # 経路が見つかれば、移動を開始
                 if self.current_path:
                     self.moving = True
             self.move()
+            # スタート位置に到着したら、復活処理を行う
             if self.get_grid_pos() == self.start_pos:
                 self.revive()
-            return
+            return  # 食べられた状態なので、これ以上の処理は行わない
         
-        # 通常の状態更新
+        # 敵が通常モード（追跡または縄張り）の場合の処理
         if self.mode != EnemyMode.WEAK:
+            # 追跡モードの場合、追跡時間が経過していれば縄張りモードに移行
             if self.mode == EnemyMode.CHASE and current_time - self.mode_timer > self.chase_duration:
                 self.mode = EnemyMode.TERRITORY
                 self.mode_timer = current_time
+            # 縄張りモードの場合、縄張り時間が経過していれば追跡モードに移行
             elif self.mode == EnemyMode.TERRITORY and current_time - self.mode_timer > self.territory_duration:
                 self.mode = EnemyMode.CHASE
                 self.mode_timer = current_time
         else:
+            # 弱体化時間が経過していれば、縄張りモードに戻し、画像と速度を元に戻す
             if current_time - self.weak_start_time > self.weak_duration:
-                self.mode = EnemyMode.TERRITORY
-                self.image = self.normal_image
+                self.mode = EnemyMode.CHASE
+                self.image = self.normal_image_lst[self.initial_direction]
                 self.speed = self.default_speed
         
+        # 移動中でない場合、目標位置への経路を探索
         if not self.moving:
             target = self.get_target_position()
             self.current_path = self.find_path(self.get_grid_pos(), target)
+            # 経路が見つかれば、移動を開始
             if self.current_path:
                 self.moving = True
         
+        # 経路に沿って移動
         self.move()
         
-        # プレイヤーとの衝突判定
+        # プレイヤーとの衝突判定: 敵とプレイヤーが衝突した場合の処理
         if pg.sprite.collide_rect(self, self.player):
+            # 弱体化モードの場合、食べられた状態にする
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
+            # 弱体化モードでない場合、プレイヤーをリセットし、ライフを減らす
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
                 self.player.reset_position()  # プレイヤーへのダメージ処理をここに実装
                 self.player.lives -= 1
@@ -633,12 +647,12 @@ class Enemy(pg.sprite.Sprite):
         # 現在の経路の次の目標地点を取得
         next_pos = self.current_path[0]
         target = get_pixel_pos(*next_pos)
-        current = pg.math.Vector2(self.rect.center)
-        target = pg.math.Vector2(target)
+        current_pos = pg.math.Vector2(self.rect.center)
+        target_pos = pg.math.Vector2(target)
         
         # 現在位置から目標地点までのベクトルを計算
-        direction = target - current
-        distance = direction.length()
+        move_vector = target_pos - current_pos
+        distance = move_vector.length()
         
         if distance <= self.speed:
             # 目標地点に到達
@@ -646,27 +660,24 @@ class Enemy(pg.sprite.Sprite):
             self.current_path.pop(0)
             if not self.current_path:
                 self.moving = False
-                if self.mode == 'TERRITORY':
+                if self.mode == EnemyMode.TERRITORY:
                     self.current_corner = (self.current_corner + 1) % 4
+
         else:
             # 目標地点まで移動
-            direction.scale_to_length(self.speed)
-            self.rect.center = tuple(current + direction)
-        
-        # 移動方向に応じて画像を更新
-        if not self.is_eaten and self.mode != EnemyMode.WEAK:
-            dx = 1 if direction.x > 0 else -1 if direction.x < 0 else 0
-            dy = 1 if direction.y > 0 else -1 if direction.y < 0 else 0
-            
-            # x方向の移動が y方向より大きい場合
-            if abs(direction.x) > abs(direction.y):
-                direction_key = (dx, 0)
-            else:
-                direction_key = (0, dy)
-                
-            if direction_key in self.normal_image_lst:
-                self.normal_image = self.normal_image_lst[direction_key]
-                self.image = self.normal_image
+            if move_vector.length() > 0:
+                move_vector = move_vector.normalize() * self.speed
+                self.rect.center = tuple(current_pos + move_vector)
+
+                # 移動方向を更新
+                if abs(move_vector.x) > abs(move_vector.y):
+                    self.direction = (1 if move_vector.x > 0 else -1, 0)
+                elif abs(move_vector.y) > 0:
+                    self.direction = (0, 1 if move_vector.y > 0 else -1)
+
+                # 画像を更新
+                if self.direction in self.normal_image_lst and not self.is_eaten and self.mode != EnemyMode.WEAK:
+                    self.image = self.normal_image_lst[self.direction]
 
     def make_weak(self) -> None:
         """弱体化モードに移行"""
@@ -690,13 +701,14 @@ class Enemy(pg.sprite.Sprite):
     def revive(self) -> None:
         """復活処理"""
         self.is_eaten = False
-        self.image = self.normal_image
+        self.image = self.normal_image_lst[self.initial_direction]  # 画像を初期状態に戻す
         self.speed = self.default_speed
         self.mode = EnemyMode.CHASE
         self.mode_timer = time.time()
         self.current_path = []
         self.moving = False
         self.current_weak_image = None  # weak画像の選択をリセット
+        self.direction = self.initial_direction
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
@@ -1040,8 +1052,8 @@ def main():
             enemies.draw(screen)
 
             # # デバッグ情報の更新と描画
-            # debug_info.update()
-            # debug_info.draw(screen)
+            debug_info.update()
+            debug_info.draw(screen)
 
             # スコアの描画
             score.draw(screen)
