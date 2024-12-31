@@ -200,7 +200,8 @@ class Player(pg.sprite.Sprite):
         self.death_frame = 0  # 現在の死亡アニメーションフレーム
         self.death_timer = 0  # 死亡アニメーションタイマー
         self.death_duration = 4  # 死亡アニメーションの長さ（秒）
-        self.death_start_time = 0 # 死亡アニメーション開始時間
+        self.death_start_time = 0  # 死亡アニメーション開始時間
+        self.game_over = False  # ゲームオーバーフラグ
 
     def reset_position(self): 
         """
@@ -219,8 +220,8 @@ class Player(pg.sprite.Sprite):
             keys: キー入力の状態
         """
 
-        if self.is_dying:
-            return  # 死亡アニメーション中は入力を受け付けない
+        if self.is_dying or self.game_over:
+            return # 死亡アニメーション中またはゲームオーバー中は入力を受け付けない
 
         new_direction = None
         
@@ -418,7 +419,7 @@ class Player(pg.sprite.Sprite):
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
     
-    def start_death_animation(self):
+    def start_death_animation(self) -> None:
         """死亡アニメーションを開始する"""
         self.is_dying = True
         self.lives -= 1
@@ -427,7 +428,7 @@ class Player(pg.sprite.Sprite):
         self.death_start_time = time.time()
         self.image = self.death_images[0]
     
-    def update_death_animation(self):
+    def update_death_animation(self) -> None:
         """死亡アニメーションを更新する"""
         current_time = time.time()
         time_elapsed = current_time - self.death_start_time
@@ -437,6 +438,10 @@ class Player(pg.sprite.Sprite):
             self.image = self.death_images[frame_index]
         else:
             self.is_dying = False
+            if self.lives <= 0:
+                self.game_over = True
+                return
+            
             self.death_frame = 0
             self.image = self.original_images[0]
             self.reset_position()
@@ -1190,6 +1195,16 @@ def main():
                 if event.type == pg.KEYDOWN and event.key == pg.K_3:  # スペースキーで開始 難易度：高い
                     start = False
                     map_data, player, score, baits, enemies, debug_info = input_map_data(1)
+        
+        elif player and player.game_over:  # ゲームオーバー画面を描画
+            draw_game_over(screen)
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
+                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # space でスタート画面
+                    start = True
+
         else:
             screen.fill((0, 0, 0))
             # マップの描画
