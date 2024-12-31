@@ -570,6 +570,8 @@ class Enemy(pg.sprite.Sprite):
         self.restart_start_time = 0
         self.is_restarting = False
 
+        self.eaten_after = False  # 食べられた瞬間の処理を行うためのフラグ
+
     def update(self) -> None:
         """敵の位置を更新"""
         current_time = time.time()
@@ -587,6 +589,10 @@ class Enemy(pg.sprite.Sprite):
                 self.can_move = True
             else:
                 return
+        
+        if self.eaten_after:  # 食べられた瞬間 1秒処理停止
+            time.sleep(1)
+            self.eaten_after = False
         
         # スタート時の遅延チェック: ゲーム開始からの経過時間が、設定された遅延時間を超えているかを確認
         if not self.can_move and not self.is_reviving and not self.is_restarting:
@@ -634,7 +640,7 @@ class Enemy(pg.sprite.Sprite):
         # 経路に沿って移動
         self.move()
         
-        # プレイヤーとの衝突判定: 敵とプレイヤーが衝突した場合の処理
+        # 敵とプレイヤーが衝突した場合の処理
         if pg.sprite.collide_rect(self, self.player):
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
@@ -762,6 +768,7 @@ class Enemy(pg.sprite.Sprite):
         self.speed = self.default_speed * 2  # 速度を2倍に上昇
         self.current_path = []
         self.moving = False
+        self.eaten_after = True
     
     def revive(self) -> None:
         """復活処理"""
@@ -1154,6 +1161,7 @@ def input_map_data(map_n):
                 baits.add(Item((y, x), map_data.playfield[x][y]["dot"], score))
 
     # 敵のグループを作成
+    Enemy.enemies_group = []  # Enemyクラスのクラス変数を初期化
     enemies = pg.sprite.Group()
     for i in range(4):
         enemies.add(Enemy(i+1, player, map_data))
@@ -1221,7 +1229,7 @@ def main():
             player.draw(screen)
 
             # 敵の更新と描画
-            if not player.is_dying: # プレイヤーが死亡アニメーション中は敵の更新を停止
+            if not player.is_dying:  # プレイヤーが死亡アニメーション中は敵の更新を停止
                 enemies.update()
             enemies.draw(screen)
 
