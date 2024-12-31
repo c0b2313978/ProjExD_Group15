@@ -485,7 +485,7 @@ class EnemyMode(Enum):
 
 
 class Enemy(pg.sprite.Sprite):
-    enemies_group = []  # 全ての敵インスタンスを保持するクラス変数
+    enemies_group: list['Enemy'] = []  # 全ての敵インスタンスを保持するクラス変数
 
     def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map') -> None:
         """敵キャラクターの初期化
