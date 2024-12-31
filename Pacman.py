@@ -163,8 +163,8 @@ class Player(pg.sprite.Sprite):
 
         # 画像関連の初期化
         self.original_images = [
-            pg.transform.scale(pg.image.load("fig/pac-man1.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)),
-            pg.transform.scale(pg.image.load("fig/pac-man2.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE))
+            pg.transform.scale(pg.image.load("fig/pacman_open.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)),
+            pg.transform.scale(pg.image.load("fig/pacman_circle.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE))
         ]
         self.current_frame = 0  # 現在のアニメーションフレーム
         self.animation_counter = 0  # アニメーション用カウンター
