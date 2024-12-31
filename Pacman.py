@@ -436,6 +436,8 @@ class EnemyMode(Enum):
 
 
 class Enemy(pg.sprite.Sprite):
+    enemies_group = []  # 全ての敵インスタンスを保持するクラス変数
+
     def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map') -> None:
         """敵キャラクターの初期化
         Args:
@@ -447,6 +449,7 @@ class Enemy(pg.sprite.Sprite):
         self.enemy_id = enemy_id
         self.player = player
         self.map_data = map_data
+        Enemy.enemies_group.append(self)
 
         image_idex = [0, 4, 5, 7]
         
@@ -511,30 +514,48 @@ class Enemy(pg.sprite.Sprite):
             (map_data.width-2, map_data.height-2)
         ]
         self.current_corner = self.enemy_id - 1 # 現在の縄張りの角
+        self.revive_delay = 3
+        self.revive_start_time = 0
+        self.is_reviving = False
+        self.restart_delay = 0
+        self.restart_start_time = 0
+        self.is_restarting = False
 
     def update(self) -> None:
         """敵の位置を更新"""
         current_time = time.time()
+        if self.enemy_id == 3:
+            print(f"Enemy {self.enemy_id} update開始時: can_move={self.can_move}, is_reviving={self.is_reviving}, is_restarting={self.is_restarting}")
+
+        if self.is_reviving:
+            if current_time - self.revive_start_time >= self.revive_delay:
+                self.is_reviving = False
+                self.can_move = True
+            else:
+                return
+
+        if self.is_restarting:
+            if current_time - self.restart_start_time >= self.restart_delay:
+                self.is_restarting = False
+                self.can_move = True
+            else:
+                return
         
         # スタート時の遅延チェック: ゲーム開始からの経過時間が、設定された遅延時間を超えているかを確認
-        if not self.can_move:
+        if not self.can_move and not self.is_reviving and not self.is_restarting:
             if current_time - self.game_start_time >= self.start_delay:
-                # 遅延時間が経過していれば、移動可能フラグをTrueにする
                 self.can_move = True
             else:
                 return
         
         # 敵が食べられた状態の場合の処理
         if self.is_eaten:
-            # 移動中でない場合、スタート位置への経路を探索
-            if not self.moving:
+            if not self.moving:  # 移動中でない場合、スタート位置への経路を探索
                 self.current_path = self.find_path(self.get_grid_pos(), self.start_pos)
-                # 経路が見つかれば、移動を開始
-                if self.current_path:
+                if self.current_path:  # 経路が見つかれば、移動を開始
                     self.moving = True
             self.move()
-            # スタート位置に到着したら、復活処理を行う
-            if self.get_grid_pos() == self.start_pos:
+            if self.get_grid_pos() == self.start_pos:  # スタート位置に到着したら、復活処理を行う
                 self.revive()
             return  # 食べられた状態なので、これ以上の処理は行わない
         
@@ -556,7 +577,7 @@ class Enemy(pg.sprite.Sprite):
                 self.speed = self.default_speed
         
         # 移動中でない場合、目標位置への経路を探索
-        if not self.moving:
+        if not self.moving and self.can_move:
             target = self.get_target_position()
             self.current_path = self.find_path(self.get_grid_pos(), target)
             # 経路が見つかれば、移動を開始
@@ -568,12 +589,14 @@ class Enemy(pg.sprite.Sprite):
         
         # プレイヤーとの衝突判定: 敵とプレイヤーが衝突した場合の処理
         if pg.sprite.collide_rect(self, self.player):
-            # 弱体化モードの場合、食べられた状態にする
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
-            # 弱体化モードでない場合、プレイヤーをリセットし、ライフを減らす
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
-                self.player.reset_position()  # プレイヤーへのダメージ処理をここに実装
+                # 弱体化モードでなく、食べられていない場合、全ての敵をリセット
+                if Enemy.enemies_group is not None:
+                    for enemy in Enemy.enemies_group:
+                        enemy.reset(self.enemy_id)  # 敵ごとに異なるリスタートディレイを設定
+                self.player.reset_position()  # プレイヤーへのダメージ処理
                 self.player.lives -= 1
 
     def get_target_position(self) -> tuple[int, int]:
@@ -697,18 +720,33 @@ class Enemy(pg.sprite.Sprite):
         self.speed = self.default_speed * 2  # 速度を2倍に上昇
         self.current_path = []
         self.moving = False
-
+    
     def revive(self) -> None:
         """復活処理"""
-        self.is_eaten = False
-        self.image = self.normal_image_lst[self.initial_direction]  # 画像を初期状態に戻す
-        self.speed = self.default_speed
+        self.reset()
         self.mode = EnemyMode.CHASE
         self.mode_timer = time.time()
+        self.weak_start_time = 0
+        self.is_eaten = False
+        self.is_reviving = True
+        self.revive_start_time = time.time()
+        self.can_move = False
+    
+    def reset(self, delay=0.0) -> None:
+        """敵の状態を初期状態に戻す"""
+        self.rect.center = get_pixel_pos(*self.start_pos)
+        self.speed = self.default_speed
         self.current_path = []
         self.moving = False
-        self.current_weak_image = None  # weak画像の選択をリセット
         self.direction = self.initial_direction
+        self.image = self.normal_image_lst[self.initial_direction]
+        self.mode = EnemyMode.CHASE
+        self.mode_timer = time.time()
+        self.current_weak_image = None
+        self.can_move = False
+        self.is_restarting = True
+        self.restart_delay = delay
+        self.restart_start_time = time.time()
 
     def get_grid_pos(self) -> tuple[int, int]:
         """現在のグリッド座標を取得
@@ -778,7 +816,12 @@ class Enemy(pg.sprite.Sprite):
         Returns:
             計算されたグリッド座標(x, y)
         """
-        enemy1_pos = self.get_grid_pos()
+        if not Enemy.enemies_group or len(Enemy.enemies_group) < 1:
+            return self.get_grid_pos()
+        enemy1 = Enemy.enemies_group[0]
+        if not enemy1:
+            return self.get_grid_pos()
+        enemy1_pos = enemy1.get_grid_pos()
         player_pos = self.player.get_grid_pos()
         dx = player_pos[0] - enemy1_pos[0]
         dy = player_pos[1] - enemy1_pos[1]
@@ -818,7 +861,7 @@ class Enemy(pg.sprite.Sprite):
                     valid_positions.append((x, y))
         
         return random.choice(valid_positions) if valid_positions else self.get_grid_pos()
-    
+
 
 class Item(pg.sprite.Sprite):
     """アイテム（エサ）の管理クラス"""
@@ -906,16 +949,29 @@ class DebugInfo:
         """
         # プレイヤー情報の表示
         player_pos_text = self.font.render(f"Player Pos: {self.player.get_grid_pos()}", True, WHITE)
-        screen.blit(player_pos_text, (WIDTH - 300, 20))
+        screen.blit(player_pos_text, (WIDTH - 500, 20))
         player_moving_text = self.font.render(f"Moving: {self.player.moving}", True, WHITE)
-        screen.blit(player_moving_text, (WIDTH - 300, 50))
+        screen.blit(player_moving_text, (WIDTH - 500, 50))
         player_direction_text = self.font.render(f"Direction: {self.player.current_direction}", True, WHITE)
-        screen.blit(player_direction_text, (WIDTH - 300, 80))
+        screen.blit(player_direction_text, (WIDTH - 500, 80))
+
+        # 現在の経過時間を表示
+        current_time_text = self.font.render(f"Time: {time.time():.2f}", True, WHITE)
+        screen.blit(current_time_text, (WIDTH - 500, 110))
 
         # 敵の情報の表示と経路の描画
         for i, enemy in enumerate(self.enemies):
-            enemy_info_text = self.font.render(f"Enemy {enemy.enemy_id}: {enemy.mode.name}", True, WHITE)
-            screen.blit(enemy_info_text, (WIDTH - 300, 120 + i * 80))
+            # 敵の色を表すrectを描画
+            color_rect = pg.Surface((20, 20))
+            color_rect.fill(self.enemy_colors[i])
+            screen.blit(color_rect, (WIDTH - 500, 180 + i * 50))
+
+            # enemy_info_text = self.font.render(f"Enemy {enemy.enemy_id}: {enemy.mode.name}", True, WHITE)
+            enemy_info_text = self.font.render(
+                f"Enemy {enemy.enemy_id}: {enemy.mode.name}, Moving: {enemy.moving}, Target: {enemy.get_target_position()}",
+                True, WHITE
+            )
+            screen.blit(enemy_info_text, (WIDTH - 480, 180 + i * 50))
             target_pos = enemy.get_target_position()
             target_rect = pg.Rect(get_pixel_pos(*target_pos), (10, 10))
             pg.draw.rect(screen, self.enemy_colors[i], target_rect)
@@ -925,9 +981,9 @@ class DebugInfo:
 
         # アイテム情報の表示
         item_count_text = self.font.render(f"Total Items: {self.item_count}", True, WHITE)
-        screen.blit(item_count_text, (WIDTH - 300, 450))
+        screen.blit(item_count_text, (WIDTH - 500, 450))
         items_eaten_text = self.font.render(f"Items Eaten: {self.items_eaten}", True, WHITE)
-        screen.blit(items_eaten_text, (WIDTH - 300, 480))
+        screen.blit(items_eaten_text, (WIDTH - 500, 480))
 
 
 def draw_start_screen(screen):
@@ -996,10 +1052,11 @@ def draw_game_over(screen):
 def main():
     pg.display.set_caption("Pacman")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
-    map_data = Map("map1.txt")
+    map_data = Map("map1 copy.txt")
     player = Player((1, 1), map_data)
     score = Score()
     start = True  
+    start = False  
 
     # エサんｐグループを作成
     baits = pg.sprite.Group()
@@ -1012,6 +1069,9 @@ def main():
     enemies = pg.sprite.Group()
     for i in range(4):
         enemies.add(Enemy(i+1, player, map_data))
+    
+    # # 全ての敵インスタンスをクラス変数に設定
+    # Enemy.enemies_group = enemies
 
     # デバッグ情報表示クラスのインスタンスを作成
     debug_info = DebugInfo(player, enemies, baits)
