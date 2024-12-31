@@ -924,9 +924,9 @@ def draw_start_screen(screen):
     """
     screen.fill((0,0,0))  # 背景を黒に設定
 
-    #タイトル表示(画面上部に配置)
-    font_title=pg.font.Font(None,100)
-    title_text=font_title.render("PacmanGame",True,(255,255,0))  #黄色の文字
+    # タイトル表示(画面上部に配置)
+    font_title = pg.font.Font(None, 100)
+    title_text = font_title.render("PacmanGame", True, (255, 255, 0))  # 黄色の文字
     screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 50))  # 上部（y=50）に配置
      
     # パックマンのイラストを描画
@@ -935,28 +935,75 @@ def draw_start_screen(screen):
     pacman_color = (255, 255, 0)  # 黄色
     pacman_mouth_angle = 30  # 口の開き角度
 
-    # パックマンの本体（扇形）を描画
-    points = [pacman_center]  # 扇形の頂点リスト
-    for angle in range(pacman_mouth_angle, 360 - pacman_mouth_angle + 1, 1):  # 1度ずつ増加
+    # パックマン本体の描画（扇形）
+    points = [pacman_center]
+    for angle in range(pacman_mouth_angle, 360 - pacman_mouth_angle + 1, 1): 
         x = pacman_center[0] + pacman_radius * math.cos(math.radians(angle))
         y = pacman_center[1] - pacman_radius * math.sin(math.radians(angle))
         points.append((x, y))
-    pg.draw.polygon(screen, pacman_color, points)  # 塗りつぶした扇形を描画
+    pg.draw.polygon(screen, pacman_color, points)
 
     # パックマンの目を描画
     eye_position = (pacman_center[0] + pacman_radius // 4, pacman_center[1] - pacman_radius // 2)
     eye_radius = 10
     pg.draw.circle(screen, (0, 0, 0), eye_position, eye_radius)
 
-    # スペースキー案内を表示
-    font_subtitle = pg.font.Font(None, 50)  # 中くらいのフォント
-    press_space_text = font_subtitle.render("PRESS SPACE KEY", True, (255, 255, 255))  # 白色の文字
-    screen.blit(press_space_text, (WIDTH // 2 - press_space_text.get_width() // 2, HEIGHT // 2 + 100))
+    # ------------------------------------------------
+    # ここから “Select Difficulty” と難易度別テキスト
+    # ------------------------------------------------
 
+    font_subtitle = pg.font.Font(None, 50)
+    
+    # 「Select Difficulty」 のテキストを描画
+    select_diff_text = font_subtitle.render("PRESS KEY", True, (255, 255, 255))  # 白色で描画
+    # 難易度テキスト群より少し上に置きたいので、この時点ではまだ座標を決めずにおく
+    
+    # それぞれ色を変えて render する
+    press_key_text = font_subtitle.render("Select Difficulty ", True, (255, 255, 255))  # 白
+    easy_text      = font_subtitle.render("1: Easy ",   True, (  0, 255,   0))  # 緑
+    normal_text    = font_subtitle.render("2: Normal ", True, (255, 255,   0))  # 黄
+    hard_text      = font_subtitle.render("3: Hard",    True, (255,   0,   0))  # 赤
+
+    # 全パーツの横幅合計を計算 → 中央寄せのためのX座標を求める
+    difficulty_line_total_width = (
+        press_key_text.get_width() + 
+        easy_text.get_width()      + 
+        normal_text.get_width()    + 
+        hard_text.get_width()
+    )
+    start_x = WIDTH // 2 - difficulty_line_total_width // 2
+
+    # “Select Difficulty” の表示幅を用いて、それも中央寄せ
+    select_diff_x = WIDTH // 2 - select_diff_text.get_width() // 2
+    
+    # 配置するY座標を決める
+    # まず Select Difficulty を表示し、その少し下に難易度行を表示する
+    select_diff_y = HEIGHT // 2 + 50 + 50  # 例えば画面の中央から50px下
+    difficulty_line_y = select_diff_y + 60  # 例えば “select difficulty” の下に 60px
+
+    # “Select Difficulty” を描画
+    screen.blit(select_diff_text, (select_diff_x, select_diff_y))
+
+    # 難易度別テキストを一行にまとめて表示
+    x = start_x
+    screen.blit(press_key_text, (x, difficulty_line_y))
+    x += press_key_text.get_width()
+    screen.blit(easy_text, (x, difficulty_line_y))
+    x += easy_text.get_width()
+    screen.blit(normal_text, (x, difficulty_line_y))
+    x += normal_text.get_width()
+    screen.blit(hard_text, (x, difficulty_line_y))
+
+    # ------------------------------------------------
     # コピーライト表示
-    font_copyright = pg.font.Font(None, 30)  # 小さいフォント
+    # ------------------------------------------------
+    font_copyright = pg.font.Font(None, 30)
     copyright_text = font_copyright.render("(c) 2024 Group15", True, (255, 255, 255))
-    screen.blit(copyright_text, (WIDTH - copyright_text.get_width() - 10, HEIGHT - copyright_text.get_height() - 10))
+    screen.blit(
+        copyright_text,
+        (WIDTH - copyright_text.get_width() - 10, HEIGHT - copyright_text.get_height() - 10)
+    )
+
 
 def draw_game_over(screen):
     """
@@ -981,14 +1028,14 @@ def draw_game_over(screen):
     screen.blit(pacman_image, pacman_rect)
     
 
-def main():
-    pg.display.set_caption("Pacman")
-    screen = pg.display.set_mode((WIDTH, HEIGHT))
-    map_data = Map("map1.txt")
+def input_map_data(map_n):
+    """
+    マップデータを入力して返す関数
+    """
+    map_dic = {1: "map1.txt", 2: "map2.txt", 3: "map3.txt"}
+    map_data = Map(map_dic[map_n])
     player = Player((1, 1), map_data)
     score = Score()
-    start = True  
-
     # エサんｐグループを作成
     baits = pg.sprite.Group()
     for x in range(map_data.height):
@@ -1003,6 +1050,13 @@ def main():
 
     # デバッグ情報表示クラスのインスタンスを作成
     debug_info = DebugInfo(player, enemies, baits)
+    return map_data, player, score, baits, enemies, debug_info
+
+
+def main():
+    pg.display.set_caption("Pacman")
+    screen = pg.display.set_mode((WIDTH, HEIGHT))
+    start = True  
 
     tmr = 0
     clock = pg.time.Clock()
@@ -1017,9 +1071,17 @@ def main():
                 if event.type == pg.QUIT:
                     pg.quit()
                     sys.exit()
-                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # スペースキーで開始
+                if event.type == pg.KEYDOWN and event.key == pg.K_1:  # スペースキーで開始 難易度：低い
                     start = False
+                    map_data, player, score, baits, enemies, debug_info = input_map_data(2)
+
+                if event.type == pg.KEYDOWN and event.key == pg.K_2:  # スペースキーで開始 難易度：普通
+                    start = False
+                    map_data, player, score, baits, enemies, debug_info = input_map_data(3)
                     
+                if event.type == pg.KEYDOWN and event.key == pg.K_3:  # スペースキーで開始 難易度：高い
+                    start = False
+                    map_data, player, score, baits, enemies, debug_info = input_map_data(1)
         else:
             screen.fill((0, 0, 0))
             # マップの描画
