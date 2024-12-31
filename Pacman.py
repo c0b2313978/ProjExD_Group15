@@ -191,24 +191,37 @@ class Player(pg.sprite.Sprite):
         self.last_warp_pos = None  # 最後にワープした位置
         self.warp_cells = [tuple(cell.values()) for cell in map_data.tunnels]
 
+        # 死亡アニメーション関連の変数
+        self.is_dying = False  # 死亡アニメーション中かどうか
+        self.death_images = [
+            pg.transform.scale(pg.image.load(f"fig/pacman_death/pacman_open_{i:02d}.png").convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE))
+            for i in range(20)
+        ]
+        self.death_frame = 0  # 現在の死亡アニメーションフレーム
+        self.death_timer = 0  # 死亡アニメーションタイマー
+        self.death_duration = 4  # 死亡アニメーションの長さ（秒）
+        self.death_start_time = 0 # 死亡アニメーション開始時間
+
     def reset_position(self): 
         """
         プレイヤーの位置を初期位置に戻す
         """
         self.rect.center = get_pixel_pos(*self.grid_pos)  # 初期位置に設定
         self.current_direction = None  # 移動方向をリセット
+        self.queued_direction = None
         self.moving = False
-        
-        
-
-        
-
+        self.angle = 0
+        self.target_angle = 0
     
     def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
         """キー入力を処理
         Args:
             keys: キー入力の状態
         """
+
+        if self.is_dying:
+            return  # 死亡アニメーション中は入力を受け付けない
+
         new_direction = None
         
         # 新しい入力方向を取得
@@ -314,6 +327,10 @@ class Player(pg.sprite.Sprite):
 
     def update(self) -> None:
         """プレイヤーの位置を更新"""
+        if self.is_dying:
+            self.update_death_animation()
+            return # 死亡アニメーション中は通常の更新処理を行わない
+        
         if self.moving:
             # 目標位置に到達したかチェック
             dx = self.target_pos[0] - self.rect.centerx
@@ -400,6 +417,33 @@ class Player(pg.sprite.Sprite):
         """
         x, y = pos
         return self.map_data.playfield[y][x]['tunnel']
+    
+    def start_death_animation(self):
+        """死亡アニメーションを開始する"""
+        self.is_dying = True
+        self.lives -= 1
+        self.death_frame = 0
+        self.death_timer = 0
+        self.death_start_time = time.time()
+        self.image = self.death_images[0]
+    
+    def update_death_animation(self):
+        """死亡アニメーションを更新する"""
+        current_time = time.time()
+        time_elapsed = current_time - self.death_start_time
+        
+        frame_index = int((time_elapsed / self.death_duration) * len(self.death_images))
+        if frame_index < len(self.death_images):
+            self.image = self.death_images[frame_index]
+        else:
+            self.is_dying = False
+            self.death_frame = 0
+            self.image = self.original_images[0]
+            self.reset_position()
+            if Enemy.enemies_group:
+                for enemy in Enemy.enemies_group:
+                    enemy.reset(enemy.enemy_id)  # 敵ごとに異なるリスタートディレイを設定
+
     
     # def game_over(screen: pg.Surface):
     #     """
@@ -524,8 +568,6 @@ class Enemy(pg.sprite.Sprite):
     def update(self) -> None:
         """敵の位置を更新"""
         current_time = time.time()
-        if self.enemy_id == 3:
-            print(f"Enemy {self.enemy_id} update開始時: can_move={self.can_move}, is_reviving={self.is_reviving}, is_restarting={self.is_restarting}")
 
         if self.is_reviving:
             if current_time - self.revive_start_time >= self.revive_delay:
@@ -592,12 +634,7 @@ class Enemy(pg.sprite.Sprite):
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
-                # 弱体化モードでなく、食べられていない場合、全ての敵をリセット
-                if Enemy.enemies_group is not None:
-                    for enemy in Enemy.enemies_group:
-                        enemy.reset(self.enemy_id)  # 敵ごとに異なるリスタートディレイを設定
-                self.player.reset_position()  # プレイヤーへのダメージ処理
-                self.player.lives -= 1
+                self.player.start_death_animation()
 
     def get_target_position(self) -> tuple[int, int]:
         """現在のモードに応じた目標位置を取得
@@ -1169,7 +1206,8 @@ def main():
             player.draw(screen)
 
             # 敵の更新と描画
-            enemies.update()
+            if not player.is_dying: # プレイヤーが死亡アニメーション中は敵の更新を停止
+                enemies.update()
             enemies.draw(screen)
 
             # # デバッグ情報の更新と描画
