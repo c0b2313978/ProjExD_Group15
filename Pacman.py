@@ -1036,7 +1036,7 @@ def input_map_data(map_n):
     map_data = Map(map_dic[map_n])
     player = Player((1, 1), map_data)
     score = Score()
-    # エサんｐグループを作成
+    # エサグループを作成
     baits = pg.sprite.Group()
     for x in range(map_data.height):
         for y in range(map_data.width):
