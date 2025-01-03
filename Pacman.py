@@ -1145,6 +1145,23 @@ def draw_game_over(screen):
     screen.blit(pacman_image, pacman_rect)
     
 
+def draw_game_clear(screen: pg.Surface, score: 'Score'):
+    """ゲームクリア画面を描画する関数"""
+    screen.fill((0, 0, 0))  # 背景を黒に設定
+
+    font_title = pg.font.Font(None, 100)
+    title_text = font_title.render("GAME CLEAR!", True, (0, 255, 0))  # 緑色の文字
+    screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 3 - title_text.get_height() // 2))
+
+    font_score = pg.font.Font(None, 60)
+    score_text = font_score.render(f"Final Score: {score.value}", True, (255, 255, 255))
+    screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, HEIGHT // 2 - score_text.get_height() // 2))
+
+    font_instruction = pg.font.Font(None, 40)
+    instruction_text = font_instruction.render("Press SPACE to return to Start Screen", True, (255, 255, 255))
+    screen.blit(instruction_text, (WIDTH // 2 - instruction_text.get_width() // 2, HEIGHT * 2 // 3 - instruction_text.get_height() // 2))
+
+
 def input_map_data(map_n):
     """
     マップデータを入力して返す関数
@@ -1178,6 +1195,7 @@ def main():
     pg.display.set_caption("Pacman")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     start = True  
+    game_clear = False  # ゲームクリアフラグ
 
     tmr = 0
     clock = pg.time.Clock()
@@ -1212,6 +1230,17 @@ def main():
                     sys.exit()
                 if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:  # space でスタート画面
                     start = True
+        
+        elif game_clear:  # ゲームクリア画面を描画
+            draw_game_clear(screen, score)
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
+                if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+                    start = True
+                    game_clear = False
+                    player.game_over = False  # 念のためゲームオーバーフラグもリセット
 
         else:
             screen.fill((0, 0, 0))
@@ -1245,6 +1274,11 @@ def main():
                 if bait.item_type == 2 and pg.sprite.collide_rect(player, bait):
                     for enemy in enemies:
                         enemy.make_weak()
+            
+            # ゲームクリアの判定
+            if not baits:  # baitsグループが空になったらゲームクリア
+                if not game_clear:
+                    game_clear = True
 
         pg.display.update()
         tmr += 1
