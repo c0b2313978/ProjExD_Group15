@@ -487,17 +487,19 @@ class EnemyMode(Enum):
 class Enemy(pg.sprite.Sprite):
     enemies_group: list['Enemy'] = []  # 全ての敵インスタンスを保持するクラス変数
 
-    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map') -> None:
+    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 1) -> None:
         """敵キャラクターの初期化
         Args:
             enemy_id: 敵の識別番号（1-4）
             player: プレイヤーオブジェクト
             map_data: マップデータ
+            level: 敵のレベル (0-2. default: 1)
         """
         super().__init__()
         self.enemy_id = enemy_id
         self.player = player
         self.map_data = map_data
+        self.level = level
         Enemy.enemies_group.append(self)
 
         image_idex = [0, 4, 5, 7]
@@ -707,6 +709,22 @@ class Enemy(pg.sprite.Sprite):
             path.append(current)
             current = came_from.get(current)
         path.reverse()
+
+        if self.level == 2:
+            # レベル2の敵の場合、最初の突き当りまでの経路を返す
+            for i in range(1, len(path)):
+                prev_node = path[i - 1]
+                current_node = path[i]
+                
+                # 移動方向を決定
+                direction = (current_node[0] - prev_node[0], current_node[1] - prev_node[1])
+
+                # 進行方向の次のノード
+                next_x, next_y = current_node[0] + direction[0], current_node[1] + direction[1]
+                
+                neighbors = self.get_neighbors(current_node)
+                if (next_x, next_y) not in neighbors:
+                    return path[:i+1]
         
         return path if len(path) > 1 else []
 
