@@ -124,6 +124,13 @@ class Map:
                     playfield[y][x]['intersection'] = paths > 2
         self.playfield = playfield
 
+        # 移動可能な位置のリスト
+        self.valid_positions = []
+        for y in range(self.height): 
+            for x in range(self.width): 
+                if self.playfield[y][x]['path']: 
+                    self.valid_positions.append((x, y))
+
         # 敵の初期位置を特定
         self.enemy_start_positions = []
         for y in range(self.height):
@@ -487,7 +494,7 @@ class EnemyMode(Enum):
 class Enemy(pg.sprite.Sprite):
     enemies_group: list['Enemy'] = []  # 全ての敵インスタンスを保持するクラス変数
 
-    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 1) -> None:
+    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 0) -> None:
         """敵キャラクターの初期化
         Args:
             enemy_id: 敵の識別番号（1-4）
@@ -654,7 +661,7 @@ class Enemy(pg.sprite.Sprite):
         Returns:
             目標位置のグリッド座標(x, y)
         """
-        if self.mode == EnemyMode.WEAK:
+        if self.mode == EnemyMode.WEAK  or self.level == 0:
             return self.get_random_position()
         
         if self.mode == EnemyMode.TERRITORY:
@@ -917,17 +924,11 @@ class Enemy(pg.sprite.Sprite):
         return best_pos
 
     def get_random_position(self) -> tuple[int, int]:
-        """ランダムな移動可能位置を取得（壁を考慮）
+        """ランダムな移動可能位置を取得
         Returns:
             ランダムな移動可能位置のグリッド座標(x, y)
         """
-        valid_positions = []
-        for y in range(self.map_data.height):
-            for x in range(self.map_data.width):
-                if self.map_data.playfield[y][x]['path']:
-                    valid_positions.append((x, y))
-        
-        return random.choice(valid_positions) if valid_positions else self.get_grid_pos()
+        return random.choice(self.map_data.valid_positions)
 
 
 class Item(pg.sprite.Sprite):
