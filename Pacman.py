@@ -513,8 +513,8 @@ class Player(pg.sprite.Sprite):
         # 1) プレイヤー本体を描画
         screen.blit(self.image, self.rect)
 
-        # 2) "LIVES" の文字を描画
-        label_text = self.font.render("LIVES", True, (255, 255, 255))
+        # 2) "LIFE" の文字を描画
+        label_text = self.font.render("LIFE", True, (255, 255, 255))
         screen.blit(label_text, (WIDTH - 180, 10)) 
 
         # 3) 残機アイコンを右上に横並びで描画
