@@ -229,6 +229,13 @@ class Map:
                     playfield[y][x]['intersection'] = (paths > 2)
         self.playfield = playfield
 
+        # 移動可能な位置のリスト
+        self.valid_positions = []
+        for y in range(self.height): 
+            for x in range(self.width): 
+                if self.playfield[y][x]['path']: 
+                    self.valid_positions.append((x, y))
+
         # 敵の初期位置を特定
         self.enemy_start_positions = []
         for y in range(self.height):
@@ -588,11 +595,19 @@ class Enemy(pg.sprite.Sprite):
     """
     enemies_group: list['Enemy'] = []
 
-    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map') -> None:
+    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 2) -> None:
+        """敵キャラクターの初期化
+        Args:
+            enemy_id: 敵の識別番号（1-4）
+            player: プレイヤーオブジェクト
+            map_data: マップデータ
+            level: 敵のレベル (0-2. default: 1)
+        """
         super().__init__()
         self.enemy_id = enemy_id
         self.player = player
         self.map_data = map_data
+        self.level = level
         Enemy.enemies_group.append(self)
 
         image_idex = [0, 4, 5, 7]
@@ -734,18 +749,18 @@ class Enemy(pg.sprite.Sprite):
         self.move()
         
         # プレイヤー衝突判定
-        if pg.sprite.collide_rect(self, self.player):
+        if self.get_grid_pos() == self.player.get_grid_pos():
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
                 self.player.start_death_animation()
 
     def get_target_position(self) -> tuple[int, int]:
+        """現在のモードに応じた目標位置を取得
+        Returns:
+            目標位置のグリッド座標(x, y)
         """
-        敵が次に向かうターゲット座標を決定する。
-        通常モード(CHASE/TERRITORY)の場合とWEAKモードの場合で処理が異なる。
-        """
-        if self.mode == EnemyMode.WEAK:
+        if self.mode == EnemyMode.WEAK  or self.level == 0:
             return self.get_random_position()
         
         if self.mode == EnemyMode.TERRITORY:
@@ -800,6 +815,22 @@ class Enemy(pg.sprite.Sprite):
             path.append(current)
             current = came_from.get(current)
         path.reverse()
+
+        if self.level == 2:
+            # レベル2の敵の場合、最初の突き当りまでの経路を返す
+            for i in range(1, len(path)):
+                prev_node = path[i - 1]
+                current_node = path[i]
+                
+                # 移動方向を決定
+                direction = (current_node[0] - prev_node[0], current_node[1] - prev_node[1])
+
+                # 進行方向の次のノード
+                next_x, next_y = current_node[0] + direction[0], current_node[1] + direction[1]
+                
+                neighbors = self.get_neighbors(current_node)
+                if (next_x, next_y) not in neighbors:
+                    return path[:i+1]
         return path if len(path) > 1 else []
 
     def move(self) -> None:
@@ -978,16 +1009,11 @@ class Enemy(pg.sprite.Sprite):
         return best_pos
 
     def get_random_position(self) -> tuple[int, int]:
+        """ランダムな移動可能位置を取得
+        Returns:
+            ランダムな移動可能位置のグリッド座標(x, y)
         """
-        マップ内の通行可能セルからランダムに1つ選んで返す。
-        WEAKモードなど、ランダム移動に使用。
-        """
-        valid_positions = []
-        for y in range(self.map_data.height):
-            for x in range(self.map_data.width):
-                if self.map_data.playfield[y][x]['path']:
-                    valid_positions.append((x, y))
-        return random.choice(valid_positions) if valid_positions else self.get_grid_pos()
+        return random.choice(self.map_data.valid_positions)
 
 
 class Item(pg.sprite.Sprite):
