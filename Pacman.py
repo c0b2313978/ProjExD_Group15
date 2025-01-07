@@ -1337,8 +1337,8 @@ def main():
                 enemies.update()
             enemies.draw(screen)
 
-            debug_info.update()
-            debug_info.draw(screen)
+            # debug_info.update()
+            # debug_info.draw(screen)
 
             score.draw(screen)
 
