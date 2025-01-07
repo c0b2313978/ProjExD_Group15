@@ -323,7 +323,7 @@ class Player(pg.sprite.Sprite):
         ]
         self.death_frame = 0
         self.death_timer = 0
-        self.death_duration = 4
+        self.death_duration = 3
         self.death_start_time = 0
         self.game_over = False
 
@@ -1363,8 +1363,8 @@ def main():
                 enemies.update()
             enemies.draw(screen)
 
-            debug_info.update()
-            debug_info.draw(screen)
+            # debug_info.update()
+            # debug_info.draw(screen)
 
             score.draw(screen)
 
