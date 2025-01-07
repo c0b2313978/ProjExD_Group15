@@ -198,10 +198,6 @@ class Player(pg.sprite.Sprite):
         self.current_direction = None  # 移動方向をリセット
         self.moving = False
         
-        
-
-        
-
     
     def handle_input(self, keys: pg.key.ScancodeWrapper) -> None:
         """キー入力を処理
