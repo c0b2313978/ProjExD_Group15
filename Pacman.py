@@ -595,7 +595,7 @@ class Enemy(pg.sprite.Sprite):
     """
     enemies_group: list['Enemy'] = []
 
-    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 0) -> None:
+    def __init__(self, enemy_id: int, player: 'Player', map_data: 'Map', level: int = 2) -> None:
         """敵キャラクターの初期化
         Args:
             enemy_id: 敵の識別番号（1-4）
@@ -749,7 +749,7 @@ class Enemy(pg.sprite.Sprite):
         self.move()
         
         # プレイヤー衝突判定
-        if pg.sprite.collide_rect(self, self.player):
+        if self.get_grid_pos() == self.player.get_grid_pos():
             if self.mode == EnemyMode.WEAK and not self.is_eaten:
                 self.get_eaten()
             elif self.mode != EnemyMode.WEAK and not self.is_eaten:
