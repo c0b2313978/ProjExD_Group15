@@ -1357,11 +1357,11 @@ def main():
             keys = pg.key.get_pressed()
             player.handle_input(keys)
             player.update()
-            player.draw(screen)
 
             if not player.is_dying:
                 enemies.update()
             enemies.draw(screen)
+            player.draw(screen)
 
             # debug_info.update()
             # debug_info.draw(screen)
